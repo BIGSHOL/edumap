@@ -1,0 +1,16 @@
+@import url("https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css");
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Leaflet 지도 z-index 충돌 방지 */
+.leaflet-container {
+  z-index: 0;
+}
+
+@layer base {
+  body {
+    @apply bg-background text-text-primary;
+  }
+}
