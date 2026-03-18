@@ -65,7 +65,7 @@ export async function POST(request: Request) {
         id: crypto.randomUUID(),
         reportType: validType,
         reportContent,
-        modelUsed: "claude-opus-4-5",
+        modelUsed: "claude-sonnet-4-6-20250514",
         generatedAt: new Date().toISOString(),
         source: "학교알리미 (2024년 기준)",
         cached: false,

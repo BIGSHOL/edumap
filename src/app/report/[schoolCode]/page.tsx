@@ -7,6 +7,7 @@ import type { SchoolDetail } from "@/lib/api/contracts/schools";
 import { TeacherStatsChart } from "@/components/charts/TeacherStatsChart";
 import { FinanceChart } from "@/components/charts/FinanceChart";
 import { Header } from "@/components/Header";
+import { AiMarkdown } from "@/components/AiMarkdown";
 
 const REPORT_TYPE_LABELS: Record<ReportType, string> = {
   policy: "정책담당자용",
@@ -29,13 +30,21 @@ export default function SchoolReportPage() {
   const [reportContent, setReportContent] = useState("");
   const [loading, setLoading] = useState(false);
   const [schoolLoading, setSchoolLoading] = useState(true);
+  const [comparison, setComparison] = useState("");
 
   useEffect(() => {
     async function fetchSchool() {
       try {
         const res = await fetch(`/api/schools/${schoolCode}`);
         const body = await res.json();
-        if (res.ok) setSchool(body.data);
+        if (res.ok) {
+          setSchool(body.data);
+          // 비교 문장 가져오기 (Flash-Lite, 캐시됨)
+          fetch(`/api/ai-insight?type=comparison&schoolCode=${schoolCode}&region=${body.data.regionCode}`)
+            .then((r) => r.json())
+            .then((b) => { if (b.data?.[schoolCode]) setComparison(b.data[schoolCode]); })
+            .catch(() => {});
+        }
       } catch {
         console.error("학교 정보 조회 실패");
       } finally {
@@ -133,7 +142,28 @@ export default function SchoolReportPage() {
                 {SCHOOL_TYPE_LABELS[school.schoolType]} &middot; {school.district}
                 {school.address && ` &middot; ${school.address}`}
               </p>
-              <p className="text-white/50 text-xs mt-1">학교 코드: {school.schoolCode}</p>
+              {/* 학교 프로필 확장 */}
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-white/60">
+                {school.foundationType && <span>설립: {school.foundationType}</span>}
+                {school.foundationDate && <span>설립일: {school.foundationDate.replace(/(\d{4})(\d{2})(\d{2})/, "$1.$2.$3")}</span>}
+                {school.coeducationType && <span>{school.coeducationType}</span>}
+                {school.highSchoolType && school.highSchoolType !== "해당없음" && <span>유형: {school.highSchoolType}</span>}
+                {school.dayNightType && school.dayNightType !== "해당없음" && <span>{school.dayNightType}</span>}
+              </div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1 text-xs text-white/50">
+                <span>학교 코드: {school.schoolCode}</span>
+                {school.phoneNumber && <span>TEL: {school.phoneNumber}</span>}
+                {school.homepageUrl && (
+                  <a href={school.homepageUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-white/70">
+                    홈페이지
+                  </a>
+                )}
+              </div>
+              {comparison && (
+                <p className="text-white/80 text-sm mt-2 bg-white/10 rounded-lg px-3 py-2">
+                  <span className="text-white/50 mr-1">AI</span> {comparison}
+                </p>
+              )}
             </div>
             <span className={`px-4 py-2 rounded-lg text-sm font-semibold border ${riskColors[riskLevel]}`}>
               교육환경 {riskLabels[riskLevel]}
@@ -182,6 +212,11 @@ export default function SchoolReportPage() {
               tempTeacherRatio={tempRatio ?? null}
               totalTeachers={school.teacherStats?.totalTeachers ?? null}
               totalStudents={school.teacherStats?.totalStudents ?? null}
+              femaleTeachers={school.teacherStats?.femaleTeachers ?? null}
+              maleTeachers={school.teacherStats?.maleTeachers ?? null}
+              lecturerCount={school.teacherStats?.lecturerCount ?? null}
+              currentClasses={school.teacherStats?.currentClasses ?? null}
+              authorizedClasses={school.teacherStats?.authorizedClasses ?? null}
             />
             <p className="text-xs text-text-secondary mt-3">
               출처: 학교알리미 ({school.teacherStats?.year ?? 2024}년 기준)
@@ -212,6 +247,8 @@ export default function SchoolReportPage() {
                     <tr>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary">프로그램명</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary">수강 인원</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary">교과 수강</th>
+                      <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary">특기적성 수강</th>
                       <th className="text-left px-4 py-3 text-xs font-semibold text-text-secondary">분류</th>
                     </tr>
                   </thead>
@@ -220,6 +257,8 @@ export default function SchoolReportPage() {
                       <tr key={i} className="border-t border-border">
                         <td className="px-4 py-3 text-sm">{p.subject}</td>
                         <td className="px-4 py-3 text-sm">{p.enrollment ?? "—"}명</td>
+                        <td className="px-4 py-3 text-sm">{p.academicEnrollment != null ? `${p.academicEnrollment}명` : "—"}</td>
+                        <td className="px-4 py-3 text-sm">{p.extracurricularEnrollment != null ? `${p.extracurricularEnrollment}명` : "—"}</td>
                         <td className="px-4 py-3 text-sm">
                           <span className="px-2 py-0.5 rounded-full text-xs bg-primary-lighter text-primary font-medium">
                             {p.category === "academic" ? "교과" : p.category === "extracurricular" ? "특기적성" : p.category ?? "—"}
@@ -283,8 +322,8 @@ export default function SchoolReportPage() {
                   <span className="inline-block px-3 py-1 rounded-full text-xs font-medium bg-primary-lighter text-primary mb-4">
                     {REPORT_TYPE_LABELS[selectedType]}
                   </span>
-                  <div className="prose prose-sm max-w-none leading-relaxed whitespace-pre-wrap text-text-primary">
-                    {reportContent}
+                  <div>
+                    <AiMarkdown content={reportContent} />
                   </div>
                 </div>
               ) : (

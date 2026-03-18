@@ -35,23 +35,44 @@ export const mockSchools: SchoolItem[] = [
 
 export const mockSchoolDetail: SchoolDetail = {
   ...mockSchools[0],
+  foundationType: "국립", // 설립명
+  foundationDate: "19460915", // 설립일자
+  phoneNumber: "02-880-7400", // 전화번호
+  homepageUrl: "http://www.snues.snu.ac.kr", // 홈페이지주소
+  coeducationType: "남여공학", // 남녀공학구분
+  highSchoolType: null, // 초등학교이므로 null
+  dayNightType: "주간", // 주야구분
   teacherStats: {
-    year: 2025,
+    year: 2024,
     studentsPerTeacher: 18.5, // 교원1인당학생수
     tempTeacherRatio: 0.12, // 기간제교원비율
     totalTeachers: 42,
     totalStudents: 777,
+    femaleTeachers: 30, // 여교원수
+    maleTeachers: 12, // 남교원수
+    lecturerCount: 3, // 강사수
+    currentClasses: 24, // 현재 학급수
+    authorizedClasses: 26, // 인가 학급수
   },
   financeStats: {
-    year: 2025,
+    year: 2024,
     totalBudget: 5200000000, // 세입결산총액
     educationBudget: 3100000000, // 교육활동비
     budgetPerStudent: 3990000, // 학생1인당교육비
   },
   afterschoolPrograms: [
-    { subject: "영어회화", enrollment: 25, category: "academic" }, // 프로그램명, 수강인원수
-    { subject: "코딩교실", enrollment: 20, category: "academic" },
-    { subject: "축구", enrollment: 30, category: "sports" },
+    {
+      subject: "영어회화", enrollment: 25, category: "academic",
+      academicEnrollment: 45, extracurricularEnrollment: null, totalEnrollmentSum: 75,
+    },
+    {
+      subject: "코딩교실", enrollment: 20, category: "academic",
+      academicEnrollment: 20, extracurricularEnrollment: null, totalEnrollmentSum: 20,
+    },
+    {
+      subject: "축구", enrollment: 30, category: "sports",
+      academicEnrollment: null, extracurricularEnrollment: 30, totalEnrollmentSum: 30,
+    },
   ],
 };
 

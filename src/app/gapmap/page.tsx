@@ -3,6 +3,9 @@
 import { useState, useEffect } from "react";
 import type { GapAnalysisResult, GapItem } from "@/lib/analysis/gapmap";
 import { Header } from "@/components/Header";
+import { AiMarkdown } from "@/components/AiMarkdown";
+import { AiProgressBar } from "@/components/AiProgressBar";
+import { REGIONS } from "@/lib/constants/regions";
 
 const SEVERITY_STYLES: Record<string, { bg: string; text: string; label: string }> = {
   low: { bg: "bg-risk-safe/10", text: "text-risk-safe", label: "양호" },
@@ -17,33 +20,42 @@ const GAP_TYPE_LABELS: Record<string, string> = {
   underfunded: "재정 부족",
 };
 
-const REGIONS = [
-  { code: "B10", name: "서울" }, { code: "C10", name: "부산" },
-  { code: "D10", name: "대구" }, { code: "E10", name: "인천" },
-  { code: "F10", name: "광주" }, { code: "G10", name: "대전" },
-  { code: "H10", name: "울산" }, { code: "J10", name: "경기" },
-  { code: "K10", name: "강원" }, { code: "M10", name: "충북" },
-  { code: "N10", name: "충남" }, { code: "P10", name: "전북" },
-  { code: "Q10", name: "전남" }, { code: "R10", name: "경북" },
-  { code: "S10", name: "경남" }, { code: "T10", name: "제주" },
-];
-
 export default function GapMapPage() {
   const [results, setResults] = useState<GapAnalysisResult[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedSchool, setSelectedSchool] = useState<GapAnalysisResult | null>(null);
+  const [aiSuggestion, setAiSuggestion] = useState("");
+  const [aiLoading, setAiLoading] = useState(false);
   const [selectedRegion, setSelectedRegion] = useState("B10");
+  const [selectedDistrict, setSelectedDistrict] = useState("");
+  const [districts, setDistricts] = useState<Array<{ district: string; schoolCount: number }>>([]);
+  const regionName = REGIONS.find((r) => r.code === selectedRegion)?.name ?? "전체";
   const [currentPage, setCurrentPage] = useState(1);
   const [searchFilter, setSearchFilter] = useState("");
-  const PAGE_SIZE = 30;
+  const PAGE_SIZE = 20;
+
+  // 시도 변경 → 시군구 목록 로드
+  useEffect(() => {
+    setSelectedDistrict("");
+    if (selectedRegion) {
+      fetch(`/api/districts?region=${selectedRegion}`)
+        .then((r) => r.json())
+        .then((body) => setDistricts(body.data ?? []))
+        .catch(() => setDistricts([]));
+    } else {
+      setDistricts([]);
+    }
+  }, [selectedRegion]);
 
   useEffect(() => {
     async function fetchGapData() {
       setLoading(true);
       setCurrentPage(1);
       try {
-        const res = await fetch(`/api/gapmap?region=${selectedRegion}`);
+        const params = new URLSearchParams({ region: selectedRegion });
+        if (selectedDistrict) params.set("district", selectedDistrict);
+        const res = await fetch(`/api/gapmap?${params}`);
         const body = await res.json();
         if (res.ok && Array.isArray(body.data)) {
           setResults(body.data);
@@ -57,7 +69,33 @@ export default function GapMapPage() {
       }
     }
     fetchGapData();
-  }, [selectedRegion]);
+  }, [selectedRegion, selectedDistrict]);
+
+  // 학교 선택 시 AI 제안 — SSE 스트림
+  const [gapStreamUrl, setGapStreamUrl] = useState<string | null>(null);
+
+  function handleSelectSchool(result: GapAnalysisResult) {
+    setSelectedSchool(result);
+    setAiSuggestion("");
+    setGapStreamUrl(null);
+
+    if (result.totalGaps > 0) {
+      setAiLoading(true);
+      setGapStreamUrl(`/api/gapmap/stream?schoolCode=${result.schoolCode}`);
+    }
+  }
+
+  function handleGapStreamComplete(result: unknown) {
+    const body = result as { aiSuggestion?: string };
+    if (body.aiSuggestion) setAiSuggestion(body.aiSuggestion);
+    setAiLoading(false);
+    setGapStreamUrl(null);
+  }
+
+  function handleGapStreamError() {
+    setAiLoading(false);
+    setGapStreamUrl(null);
+  }
 
   const filteredResults = searchFilter
     ? results.filter((r) => r.schoolName.includes(searchFilter))
@@ -78,12 +116,29 @@ export default function GapMapPage() {
           <select
             value={selectedRegion}
             onChange={(e) => setSelectedRegion(e.target.value)}
-            className="h-10 px-4 rounded-lg border border-border bg-surface text-sm font-medium"
+            className="h-11 px-4 rounded-lg border border-border bg-surface text-sm font-medium"
           >
             {REGIONS.map((r) => (
               <option key={r.code} value={r.code}>{r.name}</option>
             ))}
           </select>
+          {districts.length > 0 && (
+            <select
+              value={selectedDistrict}
+              onChange={(e) => setSelectedDistrict(e.target.value)}
+              className="h-11 px-4 rounded-lg border border-border bg-surface text-sm font-medium"
+            >
+              <option value="">전체({regionName})</option>
+              {districts.map((d) => {
+                const short = d.district.split(" ").slice(1).join(" ") || d.district;
+                return (
+                  <option key={d.district} value={d.district}>
+                    {short} ({d.schoolCount})
+                  </option>
+                );
+              })}
+            </select>
+          )}
         </div>
         <p className="text-text-secondary mb-8">
           학교별 방과후 프로그램 카테고리 커버리지, 교원 여건, 재정 수준을 종합 분석하여 학습자원 공백을 시각화합니다.
@@ -129,10 +184,10 @@ export default function GapMapPage() {
             <p className="text-risk-danger">{error}</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
-            {/* 학교 목록 */}
-            <div className="lg:col-span-2">
-              <div className="flex items-center gap-3 mb-4">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6" style={{ height: "calc(100vh - 340px)", minHeight: "480px" }}>
+            {/* 학교 목록 — 고정 높이 + 내부 스크롤 */}
+            <div className="lg:col-span-2 flex flex-col h-full">
+              <div className="flex items-center gap-3 mb-3">
                 <h3 className="text-lg font-semibold text-text-primary whitespace-nowrap">학교별 공백 현황</h3>
                 <input
                   type="text"
@@ -143,104 +198,115 @@ export default function GapMapPage() {
                   className="flex-1 h-9 px-3 rounded-lg border border-border bg-surface text-sm placeholder:text-text-secondary focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
-              <div className="bg-surface border border-border rounded-lg overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead className="bg-background">
-                    <tr>
-                      <th className="text-left px-3 py-2 text-xs font-semibold text-text-secondary">학교명</th>
-                      <th className="text-center px-2 py-2 text-xs font-semibold text-text-secondary w-14">공백</th>
-                      <th className="text-center px-2 py-2 text-xs font-semibold text-text-secondary w-20">커버리지</th>
-                      <th className="text-center px-2 py-2 text-xs font-semibold text-text-secondary w-14">상태</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {pagedResults.map((result) => {
-                      const style = SEVERITY_STYLES[result.overallSeverity];
-                      const isSelected = selectedSchool?.schoolCode === result.schoolCode;
-                      return (
-                        <tr
-                          key={result.schoolCode}
-                          onClick={() => setSelectedSchool(result)}
-                          className={`border-t border-border cursor-pointer transition-colors ${
-                            isSelected ? "bg-primary-lighter/50" : "hover:bg-background"
-                          }`}
-                        >
-                          <td className="px-3 py-2 font-medium text-text-primary truncate max-w-[180px]">
-                            {result.schoolName}
-                          </td>
-                          <td className="px-2 py-2 text-center text-text-secondary">{result.totalGaps}</td>
-                          <td className="px-2 py-2 text-center">
-                            <div className="flex items-center gap-1">
-                              <div className="flex-1 bg-border rounded-full h-1.5">
-                                <div className="h-1.5 rounded-full bg-primary" style={{ width: `${result.coverageRate}%` }} />
+              <div className="bg-surface border border-border rounded-lg overflow-hidden flex-1 flex flex-col min-h-0">
+                <div className="overflow-y-auto flex-1">
+                  <table className="w-full text-sm">
+                    <thead className="bg-background sticky top-0 z-10">
+                      <tr>
+                        <th className="text-left px-3 py-2 text-xs font-semibold text-text-secondary">학교명</th>
+                        <th className="text-center px-2 py-2 text-xs font-semibold text-text-secondary w-14">공백</th>
+                        <th className="text-center px-2 py-2 text-xs font-semibold text-text-secondary w-20">커버리지</th>
+                        <th className="text-center px-2 py-2 text-xs font-semibold text-text-secondary w-14">상태</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {pagedResults.map((result) => {
+                        const style = SEVERITY_STYLES[result.overallSeverity];
+                        const isSelected = selectedSchool?.schoolCode === result.schoolCode;
+                        return (
+                          <tr
+                            key={result.schoolCode}
+                            onClick={() => handleSelectSchool(result)}
+                            className={`border-t border-border cursor-pointer transition-colors ${
+                              isSelected ? "bg-primary-lighter/50" : "hover:bg-background"
+                            }`}
+                          >
+                            <td className="px-3 py-2 font-medium text-text-primary truncate max-w-[180px]">
+                              {result.schoolName}
+                            </td>
+                            <td className="px-2 py-2 text-center text-text-secondary">{result.totalGaps}</td>
+                            <td className="px-2 py-2 text-center">
+                              <div className="flex items-center gap-1">
+                                <div className="flex-1 bg-border rounded-full h-1.5">
+                                  <div className="h-1.5 rounded-full bg-primary" style={{ width: `${result.coverageRate}%` }} />
+                                </div>
+                                <span className="text-xs text-text-secondary w-8">{result.coverageRate}%</span>
                               </div>
-                              <span className="text-xs text-text-secondary w-8">{result.coverageRate}%</span>
-                            </div>
-                          </td>
-                          <td className="px-2 py-2 text-center">
-                            <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${style.bg} ${style.text}`}>
-                              {style.label}
-                            </span>
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-              {/* 페이지네이션 */}
-              {totalPages > 1 && (
-                <div className="flex items-center justify-center gap-2 mt-4 px-4 pb-4">
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
-                    disabled={currentPage === 1}
-                    className="px-3 py-1.5 rounded-lg border border-border bg-surface text-sm font-medium disabled:opacity-40 hover:bg-background transition-colors"
-                  >
-                    이전
-                  </button>
-                  {Array.from(
-                    { length: Math.min(5, totalPages) },
-                    (_, i) => {
-                      let pageNum: number;
-                      if (totalPages <= 5) {
-                        pageNum = i + 1;
-                      } else if (currentPage <= 3) {
-                        pageNum = i + 1;
-                      } else if (currentPage >= totalPages - 2) {
-                        pageNum = totalPages - 4 + i;
-                      } else {
-                        pageNum = currentPage - 2 + i;
-                      }
-                      return (
-                        <button
-                          key={pageNum}
-                          onClick={() => setCurrentPage(pageNum)}
-                          className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
-                            currentPage === pageNum
-                              ? "bg-primary text-white"
-                              : "border border-border bg-surface hover:bg-background"
-                          }`}
-                        >
-                          {pageNum}
-                        </button>
-                      );
-                    }
-                  )}
-                  <button
-                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
-                    disabled={currentPage === totalPages}
-                    className="px-3 py-1.5 rounded-lg border border-border bg-surface text-sm font-medium disabled:opacity-40 hover:bg-background transition-colors"
-                  >
-                    다음
-                  </button>
+                            </td>
+                            <td className="px-2 py-2 text-center">
+                              <span className={`text-xs font-semibold px-1.5 py-0.5 rounded ${style.bg} ${style.text}`}>
+                                {style.label}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
-              )}
+                {/* 페이지네이션 — 테이블 하단 고정 */}
+                {totalPages > 1 && (
+                  <div className="flex items-center justify-center gap-2 py-3 px-4 border-t border-border bg-surface shrink-0">
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                      disabled={currentPage === 1}
+                      className="px-3 py-1.5 rounded-lg border border-border bg-surface text-sm font-medium disabled:opacity-40 hover:bg-background transition-colors"
+                    >
+                      이전
+                    </button>
+                    {Array.from(
+                      { length: Math.min(5, totalPages) },
+                      (_, i) => {
+                        let pageNum: number;
+                        if (totalPages <= 5) {
+                          pageNum = i + 1;
+                        } else if (currentPage <= 3) {
+                          pageNum = i + 1;
+                        } else if (currentPage >= totalPages - 2) {
+                          pageNum = totalPages - 4 + i;
+                        } else {
+                          pageNum = currentPage - 2 + i;
+                        }
+                        return (
+                          <button
+                            key={pageNum}
+                            onClick={() => setCurrentPage(pageNum)}
+                            className={`w-8 h-8 rounded-lg text-sm font-medium transition-colors ${
+                              currentPage === pageNum
+                                ? "bg-primary text-white"
+                                : "border border-border bg-surface hover:bg-background"
+                            }`}
+                          >
+                            {pageNum}
+                          </button>
+                        );
+                      }
+                    )}
+                    <button
+                      onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={currentPage === totalPages}
+                      className="px-3 py-1.5 rounded-lg border border-border bg-surface text-sm font-medium disabled:opacity-40 hover:bg-background transition-colors"
+                    >
+                      다음
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
 
-            {/* 상세 공백 분석 */}
-            <div className="lg:col-span-3">
+            {/* 상세 공백 분석 — 고정 높이 + 내부 스크롤 */}
+            <div className="lg:col-span-3 h-full min-h-0">
               {selectedSchool ? (
-                <GapDetail result={selectedSchool} />
+                <div className="h-full overflow-y-auto">
+                  <GapDetail
+                    result={selectedSchool}
+                    aiSuggestion={aiSuggestion}
+                    aiLoading={aiLoading}
+                    streamUrl={gapStreamUrl ?? undefined}
+                    onStreamComplete={handleGapStreamComplete}
+                    onStreamError={handleGapStreamError}
+                  />
+                </div>
               ) : (
                 <div className="bg-surface border border-border rounded-lg p-8 h-full flex items-center justify-center">
                   <p className="text-text-secondary">
@@ -265,7 +331,14 @@ export default function GapMapPage() {
 }
 
 /** 선택된 학교의 상세 공백 분석 뷰 */
-function GapDetail({ result }: { result: GapAnalysisResult }) {
+function GapDetail({ result, aiSuggestion, aiLoading, streamUrl, onStreamComplete, onStreamError }: {
+  result: GapAnalysisResult;
+  aiSuggestion: string;
+  aiLoading: boolean;
+  streamUrl?: string;
+  onStreamComplete?: (data: unknown) => void;
+  onStreamError?: (msg: string) => void;
+}) {
   const style = SEVERITY_STYLES[result.overallSeverity];
 
   return (
@@ -325,6 +398,29 @@ function GapDetail({ result }: { result: GapAnalysisResult }) {
             {result.gaps.map((gap, i) => (
               <GapItemCard key={i} gap={gap} />
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* AI 개선 제안 */}
+      {(aiLoading || aiSuggestion) && (
+        <div className="bg-primary/5 border border-primary/20 rounded-lg p-5">
+          <div className="flex items-start gap-3">
+            <span className="text-primary text-lg mt-0.5">AI</span>
+            <div className="flex-1">
+              <h4 className="text-sm font-semibold text-primary mb-2">AI 개선 제안</h4>
+              {aiLoading ? (
+                <AiProgressBar
+                  streamUrl={streamUrl}
+                  onComplete={onStreamComplete}
+                  onError={onStreamError}
+                />
+              ) : (
+                <div>
+                  <AiMarkdown content={aiSuggestion} />
+                </div>
+              )}
+            </div>
           </div>
         </div>
       )}

@@ -15,7 +15,7 @@ describe("EarlyAlert 위험도 스코어링", () => {
   it("기여 요인 랭킹이 포함된다", () => {
     const result = calculateRiskScore(mockSchoolDetail);
 
-    expect(result.contributingFactors.length).toBe(4);
+    expect(result.contributingFactors.length).toBe(7);
     result.contributingFactors.forEach((f) => {
       expect(f.factor).toBeDefined();
       expect(f.weight).toBeGreaterThan(0);

@@ -15,8 +15,16 @@ import { toSchoolType } from "./region-codes";
 
 // ─── NEIS → SchoolItem ───
 
-/** NEIS 학교기본정보 → SchoolItem */
-export function mapNeisToSchoolItem(row: NeisSchoolRow): SchoolItem {
+/** NEIS 학교기본정보 → SchoolItem + 메타 필드 */
+export function mapNeisToSchoolItem(row: NeisSchoolRow): SchoolItem & {
+  foundationType?: string | null;
+  foundationDate?: string | null;
+  phoneNumber?: string | null;
+  homepageUrl?: string | null;
+  coeducationType?: string | null;
+  highSchoolType?: string | null;
+  dayNightType?: string | null;
+} {
   return {
     schoolCode: row.SD_SCHUL_CODE,
     schoolName: row.SCHUL_NM,
@@ -26,12 +34,20 @@ export function mapNeisToSchoolItem(row: NeisSchoolRow): SchoolItem {
     latitude: null,
     longitude: null,
     address: row.ORG_RDNMA || null,
+    // NEIS 메타 필드 7개
+    foundationType: row.FOND_SC_NM || null, // 설립명 (국립/공립/사립)
+    foundationDate: row.FOND_YMD || null, // 설립일자
+    phoneNumber: row.ORG_TELNO || null, // 전화번호
+    homepageUrl: row.HMPG_ADRES || null, // 홈페이지주소
+    coeducationType: row.COEDU_SC_NM || null, // 남녀공학구분
+    highSchoolType: row.HS_SC_NM || null, // 고교유형
+    dayNightType: row.DGHT_SC_NM || null, // 주야구분
   };
 }
 
 // ─── 학교알리미 → teacherStats ───
 
-/** 학교알리미 apiType=09 + apiType=17 → teacherStats */
+/** 학교알리미 apiType=09 + apiType=17 → teacherStats (확장) */
 export function mapToTeacherStats(
   overview: SchoolOverviewRow | undefined,
   positions: TeacherPositionRow | undefined,
@@ -45,11 +61,24 @@ export function mapToTeacherStats(
 
   // 기간제교원비율: apiType=17의 COL_11(기간제) / (COL_1(정규) + COL_11(기간제))
   let tempTeacherRatio: number | null = null;
+  let femaleTeachers: number | null = null;
+  let maleTeachers: number | null = null;
+  let lecturerCount: number | null = null;
+  let currentClasses: number | null = null;
+  let authorizedClasses: number | null = null;
+
   if (positions) {
     const regular = positions.COL_1 ?? 0;
     const temp = positions.COL_11 ?? 0;
     const total = regular + temp;
     tempTeacherRatio = total > 0 ? temp / total : 0;
+
+    // 교원 확장 필드 (학교알리미 apiType=17)
+    femaleTeachers = positions.FML_TOI_FGR ?? null; // 여교원수
+    maleTeachers = positions.ML_TOI_FGR ?? null; // 남교원수
+    lecturerCount = positions.COL_14 ?? null; // 강사수
+    currentClasses = positions.CURR_CCCLA_FGR ?? null; // 현재 학급수
+    authorizedClasses = positions.COM_CCCLA_FGR ?? null; // 인가 학급수
   }
 
   return {
@@ -58,22 +87,31 @@ export function mapToTeacherStats(
     tempTeacherRatio,
     totalTeachers,
     totalStudents,
+    femaleTeachers,
+    maleTeachers,
+    lecturerCount,
+    currentClasses,
+    authorizedClasses,
   };
 }
 
 // ─── 학교알리미 → afterschoolPrograms ───
 
 /**
- * 학교알리미 apiType=59 → afterschoolPrograms
+ * 학교알리미 apiType=59 → afterschoolPrograms (확장)
  *
  * 학교알리미 방과후 API는 학교 단위 요약 정보만 제공 (개별 프로그램 목록 아님)
  * 프로그램 수와 참여 학생 수를 기반으로 요약 항목 생성
+ * 확장: 교과/특기적성 수강학생수, 수강 연인원 포함
  */
 export function mapToAfterSchoolPrograms(
   programCount: number,
   participantCount: number,
   currProgramCount: number,
-  aptdProgramCount: number
+  aptdProgramCount: number,
+  academicEnrollment?: number, // 교과 수강학생수 (ASL_CURR_REG_STDNT_FGR)
+  extracurricularEnrollment?: number, // 특기적성 수강학생수 (ASL_SPABL_APTD_REG_STDNT_FGR)
+  totalEnrollmentSum?: number // 수강 연인원 (SUM_ASL_REG_STDNT_FGR)
 ): SchoolDetail["afterschoolPrograms"] {
   const programs: SchoolDetail["afterschoolPrograms"] = [];
 
@@ -83,6 +121,9 @@ export function mapToAfterSchoolPrograms(
       subject: `교과 프로그램 (${currProgramCount}개)`,
       enrollment: null,
       category: "academic",
+      academicEnrollment: academicEnrollment ?? null,
+      extracurricularEnrollment: null,
+      totalEnrollmentSum: null,
     });
   }
 
@@ -92,6 +133,9 @@ export function mapToAfterSchoolPrograms(
       subject: `특기적성 프로그램 (${aptdProgramCount}개)`,
       enrollment: null,
       category: "extracurricular",
+      academicEnrollment: null,
+      extracurricularEnrollment: extracurricularEnrollment ?? null,
+      totalEnrollmentSum: null,
     });
   }
 
@@ -101,7 +145,15 @@ export function mapToAfterSchoolPrograms(
       subject: `방과후 프로그램 (${programCount}개)`,
       enrollment: participantCount > 0 ? participantCount : null,
       category: "academic",
+      academicEnrollment: academicEnrollment ?? null,
+      extracurricularEnrollment: extracurricularEnrollment ?? null,
+      totalEnrollmentSum: totalEnrollmentSum ?? null,
     });
+  }
+
+  // 전체 수강 연인원을 첫 항목에 기록 (있는 경우)
+  if (programs.length > 0 && totalEnrollmentSum) {
+    programs[0].totalEnrollmentSum = totalEnrollmentSum;
   }
 
   return programs;
@@ -119,12 +171,24 @@ export function mapPrismaToSchoolDetail(school: {
   latitude: number | null;
   longitude: number | null;
   address: string | null;
+  foundationType?: string | null;
+  foundationDate?: string | null;
+  phoneNumber?: string | null;
+  homepageUrl?: string | null;
+  coeducationType?: string | null;
+  highSchoolType?: string | null;
+  dayNightType?: string | null;
   teacherStats: Array<{
     year: number;
     studentsPerTeacher: number | null;
     tempTeacherRatio: number | null;
     totalTeachers: number | null;
     totalStudents: number | null;
+    femaleTeachers?: number | null;
+    maleTeachers?: number | null;
+    lecturerCount?: number | null;
+    currentClasses?: number | null;
+    authorizedClasses?: number | null;
   }>;
   financeStats: Array<{
     year: number;
@@ -136,6 +200,9 @@ export function mapPrismaToSchoolDetail(school: {
     subject: string;
     enrollment: number | null;
     category: string | null;
+    academicEnrollment?: number | null;
+    extracurricularEnrollment?: number | null;
+    totalEnrollmentSum?: number | null;
   }>;
 }): SchoolDetail {
   const ts = school.teacherStats[0];
@@ -150,6 +217,14 @@ export function mapPrismaToSchoolDetail(school: {
     latitude: school.latitude,
     longitude: school.longitude,
     address: school.address,
+    // 메타 필드
+    foundationType: school.foundationType ?? null,
+    foundationDate: school.foundationDate ?? null,
+    phoneNumber: school.phoneNumber ?? null,
+    homepageUrl: school.homepageUrl ?? null,
+    coeducationType: school.coeducationType ?? null,
+    highSchoolType: school.highSchoolType ?? null,
+    dayNightType: school.dayNightType ?? null,
     teacherStats: ts
       ? {
           year: ts.year,
@@ -157,6 +232,11 @@ export function mapPrismaToSchoolDetail(school: {
           tempTeacherRatio: ts.tempTeacherRatio,
           totalTeachers: ts.totalTeachers,
           totalStudents: ts.totalStudents,
+          femaleTeachers: ts.femaleTeachers ?? null,
+          maleTeachers: ts.maleTeachers ?? null,
+          lecturerCount: ts.lecturerCount ?? null,
+          currentClasses: ts.currentClasses ?? null,
+          authorizedClasses: ts.authorizedClasses ?? null,
         }
       : null,
     financeStats: fs
@@ -173,6 +253,9 @@ export function mapPrismaToSchoolDetail(school: {
       subject: p.subject,
       enrollment: p.enrollment,
       category: p.category,
+      academicEnrollment: p.academicEnrollment ?? null,
+      extracurricularEnrollment: p.extracurricularEnrollment ?? null,
+      totalEnrollmentSum: p.totalEnrollmentSum ?? null,
     })),
   };
 }

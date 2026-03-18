@@ -18,6 +18,6 @@ describe("SchoolCard", () => {
 
   it("지역 정보가 표시된다", () => {
     render(<SchoolCard school={school} />);
-    expect(screen.getByText(/종로구/)).toBeInTheDocument();
+    expect(screen.getAllByText(/종로구/).length).toBeGreaterThanOrEqual(1);
   });
 });

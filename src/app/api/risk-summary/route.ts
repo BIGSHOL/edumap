@@ -3,8 +3,11 @@ import { prisma } from "@/lib/db/prisma";
 
 /**
  * GET /api/risk-summary
- * - region 없음: 시도별 평균 위험도
- * - region 있음: 해당 시도의 시군구별 평균 위험도
+ * 항상 시군구 단위로 평균 위험도 반환
+ * - region 없음: 전국 시군구별
+ * - region 있음: 해당 시도 시군구별
+ *
+ * 최적화: 단일 쿼리 → JS 집계 (커넥션 풀 절약)
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -14,53 +17,58 @@ export async function GET(request: Request) {
     const where: Record<string, unknown> = {};
     if (region) where.regionCode = region;
 
-    // 그룹 기준: region이면 시도별, 아니면 시군구별
-    const groupBy = region ? "district" : "regionCode";
-
-    const groups = await prisma.school.groupBy({
-      by: [groupBy],
+    const schools = await prisma.school.findMany({
       where,
-      _count: true,
+      select: {
+        regionCode: true,
+        district: true,
+        teacherStats: {
+          where: { year: 2024 },
+          select: { studentsPerTeacher: true, tempTeacherRatio: true },
+          take: 1,
+        },
+      },
     });
 
-    const results = await Promise.all(
-      groups.map(async (g) => {
-        const key = region ? (g as { district: string }).district : (g as { regionCode: string }).regionCode;
-        const schoolWhere: Record<string, unknown> = {};
-        if (region) {
-          schoolWhere.regionCode = region;
-          schoolWhere.district = key;
-        } else {
-          schoolWhere.regionCode = key;
-        }
+    // 시군구 단위 집계
+    const groups = new Map<string, {
+      regionCode: string;
+      totalSpt: number;
+      totalTemp: number;
+      count: number;
+      schoolCount: number;
+    }>();
 
-        const schoolCodes = await prisma.school.findMany({
-          where: schoolWhere,
-          select: { schoolCode: true },
-        });
+    for (const s of schools) {
+      const key = s.district;
+      if (!groups.has(key)) {
+        groups.set(key, { regionCode: s.regionCode, totalSpt: 0, totalTemp: 0, count: 0, schoolCount: 0 });
+      }
+      const g = groups.get(key)!;
+      g.schoolCount++;
 
-        const stats = await prisma.teacherStats.aggregate({
-          where: {
-            schoolCode: { in: schoolCodes.map((s) => s.schoolCode) },
-            year: 2024,
-          },
-          _avg: { studentsPerTeacher: true, tempTeacherRatio: true },
-        });
+      const ts = s.teacherStats[0];
+      if (ts) {
+        g.totalSpt += ts.studentsPerTeacher ?? 16;
+        g.totalTemp += ts.tempTeacherRatio ?? 0.1;
+        g.count++;
+      }
+    }
 
-        const avgSpt = stats._avg.studentsPerTeacher ?? 16;
-        const avgTemp = stats._avg.tempTeacherRatio ?? 0.1;
-        const sptScore = Math.min(100, Math.max(0, ((avgSpt - 10) / 15) * 100));
-        const tempScore = Math.min(100, Math.max(0, (avgTemp / 0.3) * 100));
-        const avgScore = Math.round(sptScore * 0.6 + tempScore * 0.4);
+    const results = Array.from(groups.entries()).map(([district, g]) => {
+      const avgSpt = g.count > 0 ? g.totalSpt / g.count : 16;
+      const avgTemp = g.count > 0 ? g.totalTemp / g.count : 0.1;
+      const sptScore = Math.min(100, Math.max(0, ((avgSpt - 10) / 15) * 100));
+      const tempScore = Math.min(100, Math.max(0, (avgTemp / 0.3) * 100));
+      const avgScore = Math.round(sptScore * 0.6 + tempScore * 0.4);
 
-        return {
-          regionCode: region || key,
-          district: region ? key : undefined,
-          schoolCount: g._count,
-          avgScore,
-        };
-      })
-    );
+      return {
+        regionCode: g.regionCode,
+        district,
+        schoolCount: g.schoolCount,
+        avgScore,
+      };
+    });
 
     const response = NextResponse.json({
       data: results,
@@ -68,10 +76,11 @@ export async function GET(request: Request) {
     });
     response.headers.set("Cache-Control", "public, max-age=600");
     return response;
-  } catch {
-    return NextResponse.json(
-      { error: { code: "INTERNAL_ERROR", message: "위험도 요약 조회 실패" } },
-      { status: 500 }
-    );
+  } catch (error) {
+    console.error("[risk-summary] 에러:", error);
+    return NextResponse.json({
+      data: [],
+      meta: { source: "학교알리미 (오프라인)", total: 0 },
+    });
   }
 }

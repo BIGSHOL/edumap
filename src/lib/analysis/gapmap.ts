@@ -104,6 +104,52 @@ export function analyzeGaps(school: SchoolDetail): GapAnalysisResult {
     }
   }
 
+  // 2-1. 교과/특기적성 수강 비율 불균형 탐지
+  const totalAcademic = school.afterschoolPrograms.reduce(
+    (sum, p) => sum + (p.academicEnrollment ?? 0), 0
+  );
+  const totalExtracurricular = school.afterschoolPrograms.reduce(
+    (sum, p) => sum + (p.extracurricularEnrollment ?? 0), 0
+  );
+  const enrollmentTotal = totalAcademic + totalExtracurricular;
+  if (enrollmentTotal > 0) {
+    const academicRatio = totalAcademic / enrollmentTotal;
+    if (academicRatio > 0.85) {
+      gaps.push({
+        type: "low_enrollment",
+        category: "arts",
+        severity: "medium",
+        description: `교과 수강 비율이 ${Math.round(academicRatio * 100)}%로 특기적성 수강이 부족합니다.`,
+        recommendation: `특기적성(예술/체육/외국어) 프로그램을 확충하여 균형 잡힌 학습 환경을 조성하세요.`,
+      });
+    } else if (academicRatio < 0.15) {
+      gaps.push({
+        type: "low_enrollment",
+        category: "academic",
+        severity: "medium",
+        description: `교과 수강 비율이 ${Math.round(academicRatio * 100)}%로 교과 보충이 부족합니다.`,
+        recommendation: `교과 보충 프로그램(수학/국어/영어 등)을 개설하여 학습 격차를 줄이세요.`,
+      });
+    }
+  }
+
+  // 2-2. 프로그램당 평균 수강인원 기반 저조 프로그램 탐지
+  const totalEnrollmentSum = school.afterschoolPrograms.reduce(
+    (sum, p) => sum + (p.totalEnrollmentSum ?? 0), 0
+  );
+  const programCountForAvg = school.afterschoolPrograms.length;
+  if (totalEnrollmentSum > 0 && programCountForAvg > 0) {
+    const avgEnrollment = totalEnrollmentSum / programCountForAvg;
+    if (avgEnrollment < 10 && school.teacherStats?.totalStudents && school.teacherStats.totalStudents > 100) {
+      gaps.push({
+        type: "low_enrollment",
+        severity: "medium",
+        description: `프로그램당 평균 수강인원이 ${avgEnrollment.toFixed(1)}명으로 전반적으로 저조합니다.`,
+        recommendation: `학생 수요 조사를 실시하고, 인기 프로그램 중심으로 재편하여 참여율을 높이세요.`,
+      });
+    }
+  }
+
   // 3. 교원 여건 대비 분석
   if (school.teacherStats?.studentsPerTeacher != null) {
     const spt = school.teacherStats.studentsPerTeacher;

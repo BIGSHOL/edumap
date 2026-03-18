@@ -3,7 +3,7 @@ import type { ReportType } from "@/types/report";
 import type { SchoolDetail } from "@/lib/api/contracts/schools";
 import { buildReportPrompt } from "./prompts";
 
-const MODEL = "claude-opus-4-5";
+const MODEL = "claude-sonnet-4-6-20250514";
 
 /**
  * Claude API를 사용하여 대상별 리포트를 생성합니다.

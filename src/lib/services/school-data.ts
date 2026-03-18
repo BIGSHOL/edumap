@@ -193,11 +193,124 @@ export async function getSchoolDetail(
   };
 }
 
-// ─── 다수 학교 상세 (early-alert, gapmap용) ───
+// ─── 다수 학교 위험도 경량 조회 (대시보드용) ───
+
+export interface RiskRawData {
+  schoolCode: string;
+  schoolName: string;
+  studentsPerTeacher: number | null;
+  tempTeacherRatio: number | null;
+  budgetPerStudent: number | null;
+  programCount: number;
+  // 7요인 확장
+  femaleTeachers: number | null;
+  maleTeachers: number | null;
+  lecturerCount: number | null;
+  totalTeachers: number | null;
+  currentClasses: number | null;
+  authorizedClasses: number | null;
+  totalStudents: number | null;
+}
+
+/**
+ * 위험도 계산에 필요한 최소 필드만 조회 (대시보드 성능 최적화)
+ * - afterschoolProgram 본문 대신 _count만 사용
+ * - financeStats/teacherStats에서 필요한 숫자 컬럼만 select
+ */
+export async function getSchoolRiskData(filters?: {
+  region?: string;
+  district?: string;
+}): Promise<{ data: RiskRawData[]; source: DataSource }> {
+  // 1. Try DB — 경량 쿼리
+  try {
+    const where: Record<string, unknown> = {};
+    if (filters?.region) where.regionCode = filters.region;
+    if (filters?.district) where.district = filters.district;
+
+    const schools = await prisma.school.findMany({
+      where,
+      select: {
+        schoolCode: true,
+        schoolName: true,
+        teacherStats: {
+          where: { year: 2024 },
+          select: {
+            studentsPerTeacher: true,
+            tempTeacherRatio: true,
+            totalTeachers: true,
+            totalStudents: true,
+            femaleTeachers: true,
+            maleTeachers: true,
+            lecturerCount: true,
+            currentClasses: true,
+            authorizedClasses: true,
+          },
+          take: 1,
+        },
+        financeStats: {
+          where: { year: 2024 },
+          select: { budgetPerStudent: true },
+          take: 1,
+        },
+        _count: { select: { afterschoolProgram: true } },
+      },
+    });
+
+    if (schools.length > 0) {
+      return {
+        data: schools.map((s) => {
+          const ts = s.teacherStats[0];
+          return {
+            schoolCode: s.schoolCode,
+            schoolName: s.schoolName,
+            studentsPerTeacher: ts?.studentsPerTeacher ?? null,
+            tempTeacherRatio: ts?.tempTeacherRatio ?? null,
+            budgetPerStudent: s.financeStats[0]?.budgetPerStudent ?? null,
+            programCount: s._count.afterschoolProgram,
+            femaleTeachers: ts?.femaleTeachers ?? null,
+            maleTeachers: ts?.maleTeachers ?? null,
+            lecturerCount: ts?.lecturerCount ?? null,
+            totalTeachers: ts?.totalTeachers ?? null,
+            currentClasses: ts?.currentClasses ?? null,
+            authorizedClasses: ts?.authorizedClasses ?? null,
+            totalStudents: ts?.totalStudents ?? null,
+          };
+        }),
+        source: "db",
+      };
+    }
+  } catch {
+    // DB 미연결
+  }
+
+  // 2. Fallback: 기존 getSchoolDetails 사용
+  const result = await getSchoolDetails(filters);
+  return {
+    data: result.data.map((d) => ({
+      schoolCode: d.schoolCode,
+      schoolName: d.schoolName,
+      studentsPerTeacher: d.teacherStats?.studentsPerTeacher ?? null,
+      tempTeacherRatio: d.teacherStats?.tempTeacherRatio ?? null,
+      budgetPerStudent: d.financeStats?.budgetPerStudent ?? null,
+      programCount: d.afterschoolPrograms.length,
+      femaleTeachers: d.teacherStats?.femaleTeachers ?? null,
+      maleTeachers: d.teacherStats?.maleTeachers ?? null,
+      lecturerCount: d.teacherStats?.lecturerCount ?? null,
+      totalTeachers: d.teacherStats?.totalTeachers ?? null,
+      currentClasses: d.teacherStats?.currentClasses ?? null,
+      authorizedClasses: d.teacherStats?.authorizedClasses ?? null,
+      totalStudents: d.teacherStats?.totalStudents ?? null,
+    })),
+    source: result.source,
+  };
+}
+
+// ─── 다수 학교 상세 (gapmap, 개별 리포트용) ───
 
 export async function getSchoolDetails(filters?: {
   schoolCode?: string;
   region?: string;
+  district?: string;
 }): Promise<{ data: SchoolDetail[]; source: DataSource }> {
   // 개별 학교 조회
   if (filters?.schoolCode) {
@@ -212,10 +325,10 @@ export async function getSchoolDetails(filters?: {
   try {
     const where: Record<string, unknown> = {};
     if (filters?.region) where.regionCode = filters.region;
+    if (filters?.district) where.district = filters.district;
 
     const schools = await prisma.school.findMany({
       where,
-      take: filters?.region ? 500 : 100,
       include: {
         teacherStats: { where: { year: 2024 }, take: 1 },
         financeStats: { where: { year: 2024 }, take: 1 },
@@ -349,7 +462,10 @@ async function fetchSchoolDetailFromApis(
           afterSchool.SUM_ASL_PGM_FGR,
           afterSchool.ASL_PTPT_STDNT_FGR,
           afterSchool.ASL_CURR_PGM_FGR,
-          afterSchool.ASL_SPABL_APTD_PGM_FGR
+          afterSchool.ASL_SPABL_APTD_PGM_FGR,
+          afterSchool.ASL_CURR_REG_STDNT_FGR, // 교과 수강학생수
+          afterSchool.ASL_SPABL_APTD_REG_STDNT_FGR, // 특기적성 수강학생수
+          afterSchool.SUM_ASL_REG_STDNT_FGR // 수강 연인원
         )
       : [],
   };
@@ -399,7 +515,10 @@ async function fetchRegionSchoolDetails(
             afs.SUM_ASL_PGM_FGR,
             afs.ASL_PTPT_STDNT_FGR,
             afs.ASL_CURR_PGM_FGR,
-            afs.ASL_SPABL_APTD_PGM_FGR
+            afs.ASL_SPABL_APTD_PGM_FGR,
+            afs.ASL_CURR_REG_STDNT_FGR,
+            afs.ASL_SPABL_APTD_REG_STDNT_FGR,
+            afs.SUM_ASL_REG_STDNT_FGR
           )
         : [],
     };
@@ -424,10 +543,20 @@ async function cacheSchoolItems(rows: NeisSchoolRow[]): Promise<void> {
         },
       });
 
-      // School upsert
+      // School upsert (메타 필드 포함)
       await prisma.school.upsert({
         where: { schoolCode: item.schoolCode },
-        update: { schoolName: item.schoolName, address: item.address },
+        update: {
+          schoolName: item.schoolName,
+          address: item.address,
+          foundationType: item.foundationType,
+          foundationDate: item.foundationDate,
+          phoneNumber: item.phoneNumber,
+          homepageUrl: item.homepageUrl,
+          coeducationType: item.coeducationType,
+          highSchoolType: item.highSchoolType,
+          dayNightType: item.dayNightType,
+        },
         create: {
           schoolCode: item.schoolCode,
           schoolName: item.schoolName,
@@ -437,6 +566,13 @@ async function cacheSchoolItems(rows: NeisSchoolRow[]): Promise<void> {
           latitude: item.latitude,
           longitude: item.longitude,
           address: item.address,
+          foundationType: item.foundationType,
+          foundationDate: item.foundationDate,
+          phoneNumber: item.phoneNumber,
+          homepageUrl: item.homepageUrl,
+          coeducationType: item.coeducationType,
+          highSchoolType: item.highSchoolType,
+          dayNightType: item.dayNightType,
           dataUpdatedAt: new Date(),
         },
       });
@@ -459,12 +595,19 @@ async function cacheSchoolDetail(detail: SchoolDetail): Promise<void> {
       },
     });
 
-    // School upsert
+    // School upsert (메타 필드 포함)
     await prisma.school.upsert({
       where: { schoolCode: detail.schoolCode },
       update: {
         schoolName: detail.schoolName,
         address: detail.address,
+        foundationType: detail.foundationType ?? undefined,
+        foundationDate: detail.foundationDate ?? undefined,
+        phoneNumber: detail.phoneNumber ?? undefined,
+        homepageUrl: detail.homepageUrl ?? undefined,
+        coeducationType: detail.coeducationType ?? undefined,
+        highSchoolType: detail.highSchoolType ?? undefined,
+        dayNightType: detail.dayNightType ?? undefined,
         dataUpdatedAt: new Date(),
       },
       create: {
@@ -476,11 +619,18 @@ async function cacheSchoolDetail(detail: SchoolDetail): Promise<void> {
         latitude: detail.latitude,
         longitude: detail.longitude,
         address: detail.address,
+        foundationType: detail.foundationType ?? null,
+        foundationDate: detail.foundationDate ?? null,
+        phoneNumber: detail.phoneNumber ?? null,
+        homepageUrl: detail.homepageUrl ?? null,
+        coeducationType: detail.coeducationType ?? null,
+        highSchoolType: detail.highSchoolType ?? null,
+        dayNightType: detail.dayNightType ?? null,
         dataUpdatedAt: new Date(),
       },
     });
 
-    // TeacherStats upsert
+    // TeacherStats upsert (확장 필드 포함)
     if (detail.teacherStats) {
       const ts = detail.teacherStats;
       await prisma.teacherStats.upsert({
@@ -495,6 +645,11 @@ async function cacheSchoolDetail(detail: SchoolDetail): Promise<void> {
           tempTeacherRatio: ts.tempTeacherRatio,
           totalTeachers: ts.totalTeachers,
           totalStudents: ts.totalStudents,
+          femaleTeachers: ts.femaleTeachers ?? undefined,
+          maleTeachers: ts.maleTeachers ?? undefined,
+          lecturerCount: ts.lecturerCount ?? undefined,
+          currentClasses: ts.currentClasses ?? undefined,
+          authorizedClasses: ts.authorizedClasses ?? undefined,
         },
         create: {
           schoolCode: detail.schoolCode,
@@ -503,6 +658,11 @@ async function cacheSchoolDetail(detail: SchoolDetail): Promise<void> {
           tempTeacherRatio: ts.tempTeacherRatio,
           totalTeachers: ts.totalTeachers,
           totalStudents: ts.totalStudents,
+          femaleTeachers: ts.femaleTeachers ?? null,
+          maleTeachers: ts.maleTeachers ?? null,
+          lecturerCount: ts.lecturerCount ?? null,
+          currentClasses: ts.currentClasses ?? null,
+          authorizedClasses: ts.authorizedClasses ?? null,
           source: "schoolinfo",
         },
       });

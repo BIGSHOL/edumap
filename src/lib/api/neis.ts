@@ -8,6 +8,8 @@
  *   schoolInfo — 학교 기본정보 (학교명, 주소, 학교코드)
  */
 
+import { getCached, setCache } from "@/lib/services/api-cache";
+
 const BASE_URL = "https://open.neis.go.kr/hub";
 
 /** 학교기본정보 응답 필드 */
@@ -46,12 +48,17 @@ interface NeisPageResult<T> {
 }
 
 /**
- * 나이스 API 1페이지 호출
+ * 나이스 API 1페이지 호출 (ApiCache 적용)
  */
 async function fetchNeisPage<T>(
   service: string,
   params: Record<string, string>
 ): Promise<NeisPageResult<T>> {
+  // ApiCache 조회
+  const cacheKey = `${service}:${JSON.stringify(params)}`;
+  const cached = await getCached<NeisPageResult<T>>("neis", cacheKey);
+  if (cached) return cached;
+
   const apiKey = process.env.NEIS_API_KEY;
   if (!apiKey) {
     console.warn("[neis] NEIS_API_KEY 미설정");
@@ -86,7 +93,14 @@ async function fetchNeisPage<T>(
 
     const totalCount = head?.[0]?.list_total_count ?? 0;
     const rows = serviceData[1]?.row ?? [];
-    return { rows, totalCount };
+    const pageResult = { rows, totalCount };
+
+    // 성공한 응답만 캐싱 (TTL 24시간)
+    if (rows.length > 0) {
+      setCache("neis", cacheKey, pageResult, 24).catch(() => {});
+    }
+
+    return pageResult;
   } catch (error) {
     console.error("[neis] API 호출 실패:", error);
     return { rows: [], totalCount: 0 };

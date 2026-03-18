@@ -11,6 +11,8 @@
  *   59 — 방과후학교 운영: 프로그램 수, 참여학생수
  */
 
+import { getCached, setCache } from "@/lib/services/api-cache";
+
 const BASE_URL = "https://www.schoolinfo.go.kr/openApi.do";
 
 /** 학교급 코드 매핑 */
@@ -84,9 +86,14 @@ interface FetchParams {
 }
 
 /**
- * 학교알리미 API 단건 호출 (1페이지)
+ * 학교알리미 API 단건 호출 (1페이지, ApiCache 적용)
  */
 export async function fetchSchoolInfo<T>(params: FetchParams): Promise<SchoolInfoApiResult<T>> {
+  // ApiCache 조회
+  const cacheKey = `${params.apiType}:${params.schulKndCode}:${params.sidoCode}:${params.sggCode}:${params.pbanYr ?? "2024"}:${params.pIndex ?? 1}:${params.pSize ?? 100}`;
+  const cached = await getCached<SchoolInfoApiResult<T>>("schoolinfo", cacheKey);
+  if (cached) return cached;
+
   const apiKey = process.env.SCHOOLINFO_API_KEY;
   if (!apiKey) {
     console.warn("[schoolinfo] SCHOOLINFO_API_KEY 미설정");
@@ -106,6 +113,12 @@ export async function fetchSchoolInfo<T>(params: FetchParams): Promise<SchoolInf
   try {
     const res = await fetch(url.toString());
     const body: SchoolInfoApiResult<T> = await res.json();
+
+    // 성공한 응답만 캐싱 (TTL 24시간)
+    if (body.resultCode === "success" && body.list && body.list.length > 0) {
+      setCache("schoolinfo", cacheKey, body, 24).catch(() => {});
+    }
+
     return body;
   } catch (error) {
     console.error("[schoolinfo] API 호출 실패:", error);

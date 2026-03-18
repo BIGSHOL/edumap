@@ -6,55 +6,34 @@ import { SchoolCard } from "@/components/SchoolCard";
 import { Header } from "@/components/Header";
 import { RegionRiskMapDynamic } from "@/components/map/RegionRiskMapDynamic";
 import type { SchoolItem } from "@/lib/api/contracts/schools";
+import { REGIONS } from "@/lib/constants/regions";
 
 interface RegionSummary {
   regionCode: string;
+  district: string;
   avgScore: number;
   schoolCount: number;
 }
-
-const REGIONS = [
-  { code: "", name: "전체" },
-  { code: "B10", name: "서울" },
-  { code: "C10", name: "부산" },
-  { code: "D10", name: "대구" },
-  { code: "E10", name: "인천" },
-  { code: "F10", name: "광주" },
-  { code: "G10", name: "대전" },
-  { code: "H10", name: "울산" },
-  { code: "J10", name: "경기" },
-  { code: "K10", name: "강원" },
-  { code: "M10", name: "충북" },
-  { code: "N10", name: "충남" },
-  { code: "P10", name: "전북" },
-  { code: "Q10", name: "전남" },
-  { code: "R10", name: "경북" },
-  { code: "S10", name: "경남" },
-  { code: "T10", name: "제주" },
-];
 
 const PAGE_SIZE = 30;
 
 export default function Home() {
   const [schools, setSchools] = useState<SchoolItem[]>([]);
-  const [riskData, setRiskData] = useState<
-    Array<{
-      schoolCode: string;
-      schoolName: string;
-      score: number;
-      level: "safe" | "caution" | "warning" | "danger";
-    }>
-  >([]);
   const [riskSummary, setRiskSummary] = useState({
     total: 0,
-    danger: 0,
+    counts: { safe: 0, caution: 0, warning: 0, danger: 0 },
     avgScore: 0,
   });
+  const [topRiskSchools, setTopRiskSchools] = useState<
+    Array<{ schoolCode: string; schoolName: string; score: number; level: "safe" | "caution" | "warning" | "danger" }>
+  >([]);
   const [selectedRegion, setSelectedRegion] = useState("B10");
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [districts, setDistricts] = useState<Array<{ district: string; schoolCount: number }>>([]);
   const [searchQuery, setSearchQuery] = useState("");
   const [regionMapData, setRegionMapData] = useState<RegionSummary[]>([]);
+  const [regionSummary, setRegionSummary] = useState("");
+  const [narratives, setNarratives] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalSchools, setTotalSchools] = useState(0);
@@ -68,20 +47,7 @@ export default function Home() {
   const locationName = districtShort || regionName;
   const totalPages = Math.ceil(totalSchools / PAGE_SIZE);
 
-  // 시군구 선택 시: 학교 목록 기준으로 위험도 데이터 필터
-  const schoolCodesSet = new Set(schools.map((s) => s.schoolCode));
-  const filteredRiskData = selectedDistrict
-    ? riskData.filter((r) => schoolCodesSet.has(r.schoolCode))
-    : riskData;
-  const displaySummary = selectedDistrict
-    ? {
-        total: totalSchools,
-        danger: filteredRiskData.filter((s) => s.level === "danger" || s.level === "warning").length,
-        avgScore: filteredRiskData.length > 0
-          ? Math.round(filteredRiskData.reduce((sum, s) => sum + s.score, 0) / filteredRiskData.length)
-          : 0,
-      }
-    : riskSummary;
+  const dangerCount = riskSummary.counts.danger + riskSummary.counts.warning;
 
   // 학교 목록 로드 (페이지네이션)
   const loadSchools = useCallback(
@@ -106,7 +72,7 @@ export default function Home() {
         const body = await res.json();
         if (res.ok) {
           setSchools(body.data);
-          setTotalSchools(body.meta?.total ?? body.data.length);
+          setTotalSchools(body.meta?.total ?? body.analyzed);
         }
       } catch {
         console.error("학교 목록 로딩 실패");
@@ -117,35 +83,20 @@ export default function Home() {
     []
   );
 
-  // 위험도 데이터 로드 (지역 변경 시만)
-  const loadRiskData = useCallback(async (region: string) => {
+  // 위험도 데이터 로드 — 서버에서 집계된 요약만 수신
+  const loadRiskData = useCallback(async (region: string, district?: string) => {
     try {
-      const regionParam = region ? `region=${region}&` : "";
-      const res = await fetch(
-        `/api/early-alert?${regionParam}limit=500`
-      );
+      const params = new URLSearchParams();
+      if (region) params.set("region", region);
+      if (district) params.set("district", district);
+      const res = await fetch(`/api/early-alert?${params}`);
       const body = await res.json();
-      if (res.ok && Array.isArray(body.data)) {
-        const scores = body.data;
-        setRiskData(scores);
-        const dangerCount = scores.filter(
-          (s: { level: string }) =>
-            s.level === "danger" || s.level === "warning"
-        ).length;
-        const avg =
-          scores.length > 0
-            ? Math.round(
-                scores.reduce(
-                  (sum: number, s: { score: number }) => sum + s.score,
-                  0
-                ) / scores.length
-              )
-            : 0;
-        setRiskSummary({
-          total: body.meta?.total ?? scores.length,
-          danger: dangerCount,
-          avgScore: avg,
-        });
+      if (res.ok && body.data) {
+        const { total, counts, avgScore, topRisk } = body.data;
+        setRiskSummary({ total, counts, avgScore });
+        setTopRiskSchools(topRisk);
+        setRegionSummary(body.regionSummary ?? "");
+        setNarratives(body.narratives ?? {});
       }
     } catch {
       console.error("위험도 로딩 실패");
@@ -180,7 +131,7 @@ export default function Home() {
     setCurrentPage(1);
     setSearchQuery("");
     loadSchools(selectedRegion, 1, { district: selectedDistrict || undefined });
-    loadRiskData(selectedRegion);
+    loadRiskData(selectedRegion, selectedDistrict || undefined);
   }, [selectedRegion, selectedDistrict, loadSchools, loadRiskData]);
 
   // 페이지 변경
@@ -191,14 +142,37 @@ export default function Home() {
     });
   }, [currentPage, selectedRegion, selectedDistrict, searchQuery, loadSchools]);
 
-  // 검색
-  const handleSearch = (query: string) => {
+  // 스마트 검색 (Gemini Flash로 자연어 → 필터 변환)
+  const handleSearch = async (query: string) => {
     setSearchQuery(query);
     setCurrentPage(1);
-    loadSchools(selectedRegion, 1, {
-      search: query || undefined,
-      district: selectedDistrict || undefined,
-    });
+
+    if (!query) {
+      loadSchools(selectedRegion, 1, { district: selectedDistrict || undefined });
+      return;
+    }
+
+    // 자연어 검색 시도
+    try {
+      const res = await fetch(`/api/ai-insight?type=smart-search&q=${encodeURIComponent(query)}`);
+      const body = await res.json();
+      const filters = body.data;
+
+      if (filters?.region && filters.region !== selectedRegion) {
+        setSelectedRegion(filters.region);
+      }
+
+      loadSchools(filters?.region || selectedRegion, 1, {
+        search: filters?.schoolName || query,
+        district: selectedDistrict || undefined,
+      });
+    } catch {
+      // AI 실패 시 기본 검색
+      loadSchools(selectedRegion, 1, {
+        search: query,
+        district: selectedDistrict || undefined,
+      });
+    }
   };
 
   return (
@@ -228,7 +202,7 @@ export default function Home() {
               onChange={(e) => setSelectedDistrict(e.target.value)}
               className="h-11 px-4 rounded-lg border border-border bg-surface text-sm font-medium text-text-primary focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none"
             >
-              <option value="">전체 ({regionName})</option>
+              <option value="">전체({regionName})</option>
               {districts.map((d) => {
                 // "서울특별시 강남구" → "강남구"
                 const short = d.district.split(" ").slice(1).join(" ") || d.district;
@@ -249,7 +223,7 @@ export default function Home() {
               {locationName} 초등학교
             </p>
             <p className="text-3xl font-bold mt-1">
-              {loading ? "—" : displaySummary.total}
+              {loading ? "—" : riskSummary.total}
               <span className="text-sm font-normal text-text-secondary ml-1">
                 개교
               </span>
@@ -258,7 +232,7 @@ export default function Home() {
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">주의 이상 학교</p>
             <p className="text-3xl font-bold mt-1 text-risk-danger">
-              {loading ? "—" : displaySummary.danger}
+              {loading ? "—" : dangerCount}
               <span className="text-sm font-normal text-text-secondary ml-1">
                 개교
               </span>
@@ -269,7 +243,7 @@ export default function Home() {
               {locationName} 평균 위험도
             </p>
             <p className="text-3xl font-bold mt-1">
-              {loading ? "—" : displaySummary.avgScore}
+              {loading ? "—" : riskSummary.avgScore}
               <span className="text-sm font-normal text-text-secondary ml-1">
                 점
               </span>
@@ -277,31 +251,45 @@ export default function Home() {
           </div>
         </section>
 
+        {/* AI 지역 인사이트 */}
+        {regionSummary && (
+          <section className="mb-8 bg-primary/5 border border-primary/20 rounded-lg p-5">
+            <div className="flex items-start gap-3">
+              <span className="text-primary text-lg mt-0.5">AI</span>
+              <div>
+                <h3 className="text-sm font-semibold text-primary mb-1">{locationName} 인사이트</h3>
+                <p className="text-sm text-text-primary leading-relaxed">{regionSummary}</p>
+              </div>
+            </div>
+          </section>
+        )}
+
         {/* 전국 시도별 지도 + 위험도 분포 + 위험 학교 목록 */}
-        <section className="grid grid-cols-5 gap-6 mb-8">
-          {/* 시도별 위험도 지도 */}
-          <div className="col-span-2 bg-surface border border-border rounded-lg shadow-sm overflow-hidden" style={{ height: 360 }}>
+        <section className="grid grid-cols-12 gap-6 mb-8">
+          {/* 시군구별 위험도 지도 */}
+          <div className="col-span-5 bg-surface border border-border rounded-lg shadow-sm overflow-hidden" style={{ height: 380 }}>
             <div className="px-5 pt-4 pb-2">
-              <h3 className="text-sm font-semibold text-text-primary">전국 시도별 위험도</h3>
+              <h3 className="text-sm font-semibold text-text-primary">시군구별 위험도</h3>
               <p className="text-xs text-text-secondary mt-0.5">원 크기 = 학교 수, 색상 = 평균 위험도</p>
             </div>
-            <div style={{ height: 300 }}>
+            <div style={{ height: 320 }}>
               <RegionRiskMapDynamic
                 data={regionMapData}
                 selectedRegion={selectedRegion}
+                selectedDistrict={selectedDistrict}
                 onRegionClick={(code) => setSelectedRegion(code)}
               />
             </div>
           </div>
           {/* 선택 지역 위험도 수준별 분포 */}
-          <div className="col-span-1 bg-surface border border-border rounded-lg p-4 shadow-sm">
-            <h3 className="text-sm font-semibold text-text-primary mb-3">
+          <div className="col-span-3 bg-surface border border-border rounded-lg p-5 shadow-sm" style={{ height: 380 }}>
+            <h3 className="text-sm font-semibold text-text-primary mb-4">
               {locationName} 분포
             </h3>
-            <RiskDistribution data={filteredRiskData} total={displaySummary.total} />
+            <RiskDistribution counts={riskSummary.counts} total={riskSummary.total} />
           </div>
           {/* 위험 학교 목록 */}
-          <div className="col-span-2 bg-surface border border-border rounded-lg p-5 shadow-sm max-h-[360px] overflow-auto">
+          <div className="col-span-4 bg-surface border border-border rounded-lg p-5 shadow-sm max-h-[380px] overflow-auto">
             <h3 className="text-sm font-semibold text-text-primary mb-3">
               {locationName} 위험도 상위 학교
             </h3>
@@ -312,35 +300,32 @@ export default function Home() {
                 ))}
               </div>
             ) : (
-              <div className="space-y-1.5">
-                {riskData
-                  .filter((r) => {
-                    if (r.level !== "danger" && r.level !== "warning") return false;
-                    // 시군구 선택 시 해당 구 학교만
-                    if (selectedDistrict) {
-                      const schoolCodes = new Set(schools.map((s) => s.schoolCode));
-                      return schoolCodes.has(r.schoolCode);
-                    }
-                    return true;
-                  })
-                  .sort((a, b) => b.score - a.score)
-                  .slice(0, 20)
+              <div className="space-y-1">
+                {topRiskSchools
+                  .slice(0, 15)
                   .map((r) => (
                     <a
                       key={r.schoolCode}
                       href={`/report/${r.schoolCode}`}
-                      className="flex items-center justify-between px-3 py-1.5 rounded hover:bg-background transition-colors text-sm"
+                      className="block px-3 py-2 rounded hover:bg-background transition-colors"
                     >
-                      <span className="truncate">{r.schoolName}</span>
-                      <span
-                        className={`font-semibold ml-2 ${
-                          r.level === "danger"
-                            ? "text-risk-danger"
-                            : "text-risk-warning"
-                        }`}
-                      >
-                        {r.score}점
-                      </span>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="truncate font-medium">{r.schoolName}</span>
+                        <span
+                          className={`font-semibold ml-2 shrink-0 ${
+                            r.level === "danger"
+                              ? "text-risk-danger"
+                              : "text-risk-warning"
+                          }`}
+                        >
+                          {r.score}점
+                        </span>
+                      </div>
+                      {narratives[r.schoolCode] && (
+                        <p className="text-xs text-text-secondary mt-0.5 line-clamp-2">
+                          {narratives[r.schoolCode]}
+                        </p>
+                      )}
                     </a>
                   ))}
               </div>
@@ -452,65 +437,103 @@ export default function Home() {
   );
 }
 
-/** 위험도 수준별 분포 시각화 */
+/** 위험도 수준별 분포 — 도넛 차트 */
 function RiskDistribution({
-  data,
+  counts,
   total,
 }: {
-  data: Array<{ level: "safe" | "caution" | "warning" | "danger" }>;
+  counts: { safe: number; caution: number; warning: number; danger: number };
   total: number;
 }) {
-  const counts = {
-    safe: data.filter((d) => d.level === "safe").length,
-    caution: data.filter((d) => d.level === "caution").length,
-    warning: data.filter((d) => d.level === "warning").length,
-    danger: data.filter((d) => d.level === "danger").length,
-  };
 
   const levels = [
-    { key: "safe", label: "안전", color: "bg-risk-safe", count: counts.safe },
-    { key: "caution", label: "주의", color: "bg-risk-caution", count: counts.caution },
-    { key: "warning", label: "경고", color: "bg-risk-warning", count: counts.warning },
-    { key: "danger", label: "위험", color: "bg-risk-danger", count: counts.danger },
+    { key: "danger", label: "위험", hex: "#EF4444", count: counts.danger },
+    { key: "warning", label: "경고", hex: "#F97316", count: counts.warning },
+    { key: "caution", label: "주의", hex: "#EAB308", count: counts.caution },
+    { key: "safe", label: "안전", hex: "#22C55E", count: counts.safe },
   ];
 
+  const analyzed = counts.safe + counts.caution + counts.warning + counts.danger;
+
+  // 도넛 SVG 파라미터
+  const size = 160;
+  const strokeWidth = 28;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  let accumulated = 0;
+  const arcs = levels.map((l) => {
+    const pct = analyzed > 0 ? l.count / analyzed : 0;
+    const offset = accumulated;
+    accumulated += pct;
+    return { ...l, pct, offset };
+  });
+
+  const dangerPct = analyzed > 0 ? ((counts.danger + counts.warning) / analyzed * 100) : 0;
+
   return (
-    <div className="space-y-5">
-      {/* 수평 누적 바 */}
-      <div className="w-full h-8 rounded-lg overflow-hidden flex">
-        {levels.map((l) => {
-          const pct = total > 0 ? (l.count / total) * 100 : 0;
-          if (pct === 0) return null;
-          return (
-            <div
-              key={l.key}
-              className={`${l.color} h-full flex items-center justify-center text-white text-xs font-semibold transition-all`}
-              style={{ width: `${pct}%` }}
-            >
-              {pct >= 8 ? `${Math.round(pct)}%` : ""}
-            </div>
-          );
-        })}
+    <div className="flex flex-col items-center h-full">
+      {/* 도넛 차트 */}
+      <div className="relative" style={{ width: size, height: size }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`}>
+          {/* 배경 원 */}
+          <circle
+            cx={size / 2}
+            cy={size / 2}
+            r={radius}
+            fill="none"
+            stroke="#E5E7EB"
+            strokeWidth={strokeWidth}
+          />
+          {/* 각 구간 */}
+          {arcs.map((arc) => {
+            if (arc.pct === 0) return null;
+            return (
+              <circle
+                key={arc.key}
+                cx={size / 2}
+                cy={size / 2}
+                r={radius}
+                fill="none"
+                stroke={arc.hex}
+                strokeWidth={strokeWidth}
+                strokeDasharray={`${arc.pct * circumference} ${circumference}`}
+                strokeDashoffset={-arc.offset * circumference}
+                transform={`rotate(-90 ${size / 2} ${size / 2})`}
+                className="transition-all duration-500"
+              />
+            );
+          })}
+        </svg>
+        {/* 중앙 텍스트 */}
+        <div className="absolute inset-0 flex flex-col items-center justify-center">
+          <span className="text-2xl font-bold text-text-primary">{Math.round(dangerPct)}%</span>
+          <span className="text-[10px] text-text-secondary">주의 이상</span>
+        </div>
       </div>
 
-      {/* 수준별 카드 */}
-      <div className="grid grid-cols-2 gap-3">
+      {/* 범례 */}
+      <div className="w-full mt-5 space-y-2">
         {levels.map((l) => {
-          const pct = total > 0 ? ((l.count / total) * 100).toFixed(1) : "0";
+          const pct = analyzed > 0 ? ((l.count / analyzed) * 100).toFixed(1) : "0";
           return (
-            <div key={l.key} className="flex items-center gap-3 p-3 rounded-lg bg-background">
-              <div className={`w-3 h-3 rounded-full ${l.color} shrink-0`} />
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-text-primary">{l.label}</p>
-                <p className="text-xs text-text-secondary">{l.count}개교 ({pct}%)</p>
+            <div key={l.key} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: l.hex }} />
+                <span className="text-text-primary font-medium">{l.label}</span>
+              </div>
+              <div className="text-right">
+                <span className="font-semibold text-text-primary">{l.count}</span>
+                <span className="text-text-secondary ml-1 text-xs">({pct}%)</span>
               </div>
             </div>
           );
         })}
       </div>
 
-      <p className="text-xs text-text-secondary">
-        전체 {total}개 학교 중 분석 대상 {data.length}개 기준
+      {/* 하단 요약 */}
+      <p className="text-xs text-text-secondary mt-auto pt-4">
+        전체 {total}개 학교 중 분석 대상 {analyzed}개 기준
       </p>
     </div>
   );

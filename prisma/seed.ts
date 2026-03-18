@@ -118,13 +118,13 @@ async function main() {
 
   // 3. 교원 현황 (학교알리미)
   const teacherStats = [
-    { schoolCode: "B100000465", year: 2025, studentsPerTeacher: 18.5, tempTeacherRatio: 0.12, totalTeachers: 42, totalStudents: 777 },
-    { schoolCode: "B100000466", year: 2025, studentsPerTeacher: 15.2, tempTeacherRatio: 0.08, totalTeachers: 38, totalStudents: 578 },
-    { schoolCode: "C100000123", year: 2025, studentsPerTeacher: 22.3, tempTeacherRatio: 0.25, totalTeachers: 28, totalStudents: 624 },
-    { schoolCode: "B100000500", year: 2025, studentsPerTeacher: 14.8, tempTeacherRatio: 0.05, totalTeachers: 55, totalStudents: 814 },
-    { schoolCode: "D100000201", year: 2025, studentsPerTeacher: 20.1, tempTeacherRatio: 0.18, totalTeachers: 32, totalStudents: 643 },
-    { schoolCode: "E100000301", year: 2025, studentsPerTeacher: 16.7, tempTeacherRatio: 0.10, totalTeachers: 35, totalStudents: 585 },
-    { schoolCode: "R100000401", year: 2025, studentsPerTeacher: 24.0, tempTeacherRatio: 0.30, totalTeachers: 25, totalStudents: 600 },
+    { schoolCode: "B100000465", year: 2024, studentsPerTeacher: 18.5, tempTeacherRatio: 0.12, totalTeachers: 42, totalStudents: 777 },
+    { schoolCode: "B100000466", year: 2024, studentsPerTeacher: 15.2, tempTeacherRatio: 0.08, totalTeachers: 38, totalStudents: 578 },
+    { schoolCode: "C100000123", year: 2024, studentsPerTeacher: 22.3, tempTeacherRatio: 0.25, totalTeachers: 28, totalStudents: 624 },
+    { schoolCode: "B100000500", year: 2024, studentsPerTeacher: 14.8, tempTeacherRatio: 0.05, totalTeachers: 55, totalStudents: 814 },
+    { schoolCode: "D100000201", year: 2024, studentsPerTeacher: 20.1, tempTeacherRatio: 0.18, totalTeachers: 32, totalStudents: 643 },
+    { schoolCode: "E100000301", year: 2024, studentsPerTeacher: 16.7, tempTeacherRatio: 0.10, totalTeachers: 35, totalStudents: 585 },
+    { schoolCode: "R100000401", year: 2024, studentsPerTeacher: 24.0, tempTeacherRatio: 0.30, totalTeachers: 25, totalStudents: 600 },
   ];
 
   for (const t of teacherStats) {
@@ -138,13 +138,13 @@ async function main() {
 
   // 4. 재정 현황 (학교알리미)
   const financeStats = [
-    { schoolCode: "B100000465", year: 2025, totalBudget: BigInt(5200000000), educationBudget: BigInt(3100000000), budgetPerStudent: 3990000 },
-    { schoolCode: "B100000466", year: 2025, totalBudget: BigInt(4800000000), educationBudget: BigInt(2900000000), budgetPerStudent: 4200000 },
-    { schoolCode: "C100000123", year: 2025, totalBudget: BigInt(2800000000), educationBudget: BigInt(1600000000), budgetPerStudent: 2560000 },
-    { schoolCode: "B100000500", year: 2025, totalBudget: BigInt(6100000000), educationBudget: BigInt(3800000000), budgetPerStudent: 4670000 },
-    { schoolCode: "D100000201", year: 2025, totalBudget: BigInt(3200000000), educationBudget: BigInt(1900000000), budgetPerStudent: 2950000 },
-    { schoolCode: "E100000301", year: 2025, totalBudget: BigInt(4100000000), educationBudget: BigInt(2500000000), budgetPerStudent: 3590000 },
-    { schoolCode: "R100000401", year: 2025, totalBudget: BigInt(2500000000), educationBudget: BigInt(1400000000), budgetPerStudent: 2330000 },
+    { schoolCode: "B100000465", year: 2024, totalBudget: BigInt(5200000000), educationBudget: BigInt(3100000000), budgetPerStudent: 3990000 },
+    { schoolCode: "B100000466", year: 2024, totalBudget: BigInt(4800000000), educationBudget: BigInt(2900000000), budgetPerStudent: 4200000 },
+    { schoolCode: "C100000123", year: 2024, totalBudget: BigInt(2800000000), educationBudget: BigInt(1600000000), budgetPerStudent: 2560000 },
+    { schoolCode: "B100000500", year: 2024, totalBudget: BigInt(6100000000), educationBudget: BigInt(3800000000), budgetPerStudent: 4670000 },
+    { schoolCode: "D100000201", year: 2024, totalBudget: BigInt(3200000000), educationBudget: BigInt(1900000000), budgetPerStudent: 2950000 },
+    { schoolCode: "E100000301", year: 2024, totalBudget: BigInt(4100000000), educationBudget: BigInt(2500000000), budgetPerStudent: 3590000 },
+    { schoolCode: "R100000401", year: 2024, totalBudget: BigInt(2500000000), educationBudget: BigInt(1400000000), budgetPerStudent: 2330000 },
   ];
 
   for (const f of financeStats) {
@@ -159,32 +159,32 @@ async function main() {
   // 5. 방과후 프로그램 (학교알리미)
   const afterschoolPrograms = [
     // 서울대부설초
-    { schoolCode: "B100000465", year: 2025, subject: "영어회화", enrollment: 25, category: "academic" },
-    { schoolCode: "B100000465", year: 2025, subject: "코딩교실", enrollment: 20, category: "academic" },
-    { schoolCode: "B100000465", year: 2025, subject: "축구", enrollment: 30, category: "sports" },
+    { schoolCode: "B100000465", year: 2024, subject: "영어회화", enrollment: 25, category: "academic" },
+    { schoolCode: "B100000465", year: 2024, subject: "코딩교실", enrollment: 20, category: "academic" },
+    { schoolCode: "B100000465", year: 2024, subject: "축구", enrollment: 30, category: "sports" },
     // 경복중
-    { schoolCode: "B100000466", year: 2025, subject: "수학심화", enrollment: 22, category: "academic" },
-    { schoolCode: "B100000466", year: 2025, subject: "미술", enrollment: 18, category: "art" },
-    { schoolCode: "B100000466", year: 2025, subject: "배드민턴", enrollment: 24, category: "sports" },
-    { schoolCode: "B100000466", year: 2025, subject: "로봇공학", enrollment: 15, category: "academic" },
-    { schoolCode: "B100000466", year: 2025, subject: "밴드", enrollment: 12, category: "art" },
+    { schoolCode: "B100000466", year: 2024, subject: "수학심화", enrollment: 22, category: "academic" },
+    { schoolCode: "B100000466", year: 2024, subject: "미술", enrollment: 18, category: "art" },
+    { schoolCode: "B100000466", year: 2024, subject: "배드민턴", enrollment: 24, category: "sports" },
+    { schoolCode: "B100000466", year: 2024, subject: "로봇공학", enrollment: 15, category: "academic" },
+    { schoolCode: "B100000466", year: 2024, subject: "밴드", enrollment: 12, category: "art" },
     // 부산진초 — 프로그램 적음 (위험 요인)
-    { schoolCode: "C100000123", year: 2025, subject: "국어논술", enrollment: 15, category: "academic" },
+    { schoolCode: "C100000123", year: 2024, subject: "국어논술", enrollment: 15, category: "academic" },
     // 서울고
-    { schoolCode: "B100000500", year: 2025, subject: "영어토론", enrollment: 20, category: "academic" },
-    { schoolCode: "B100000500", year: 2025, subject: "물리실험", enrollment: 18, category: "academic" },
-    { schoolCode: "B100000500", year: 2025, subject: "농구", enrollment: 25, category: "sports" },
-    { schoolCode: "B100000500", year: 2025, subject: "오케스트라", enrollment: 30, category: "art" },
-    { schoolCode: "B100000500", year: 2025, subject: "AI프로그래밍", enrollment: 22, category: "academic" },
-    { schoolCode: "B100000500", year: 2025, subject: "일본어", enrollment: 16, category: "academic" },
+    { schoolCode: "B100000500", year: 2024, subject: "영어토론", enrollment: 20, category: "academic" },
+    { schoolCode: "B100000500", year: 2024, subject: "물리실험", enrollment: 18, category: "academic" },
+    { schoolCode: "B100000500", year: 2024, subject: "농구", enrollment: 25, category: "sports" },
+    { schoolCode: "B100000500", year: 2024, subject: "오케스트라", enrollment: 30, category: "art" },
+    { schoolCode: "B100000500", year: 2024, subject: "AI프로그래밍", enrollment: 22, category: "academic" },
+    { schoolCode: "B100000500", year: 2024, subject: "일본어", enrollment: 16, category: "academic" },
     // 대구수성초
-    { schoolCode: "D100000201", year: 2025, subject: "수학", enrollment: 20, category: "academic" },
-    { schoolCode: "D100000201", year: 2025, subject: "태권도", enrollment: 28, category: "sports" },
+    { schoolCode: "D100000201", year: 2024, subject: "수학", enrollment: 20, category: "academic" },
+    { schoolCode: "D100000201", year: 2024, subject: "태권도", enrollment: 28, category: "sports" },
     // 인천남동중
-    { schoolCode: "E100000301", year: 2025, subject: "영어", enrollment: 22, category: "academic" },
-    { schoolCode: "E100000301", year: 2025, subject: "코딩", enrollment: 18, category: "academic" },
-    { schoolCode: "E100000301", year: 2025, subject: "축구", enrollment: 26, category: "sports" },
-    { schoolCode: "E100000301", year: 2025, subject: "미술", enrollment: 14, category: "art" },
+    { schoolCode: "E100000301", year: 2024, subject: "영어", enrollment: 22, category: "academic" },
+    { schoolCode: "E100000301", year: 2024, subject: "코딩", enrollment: 18, category: "academic" },
+    { schoolCode: "E100000301", year: 2024, subject: "축구", enrollment: 26, category: "sports" },
+    { schoolCode: "E100000301", year: 2024, subject: "미술", enrollment: 14, category: "art" },
     // 수원매탄초 — 프로그램 없음 (위험 요인)
   ];
 

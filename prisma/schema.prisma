@@ -8,140 +8,140 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// FEAT-0: 지역 정보
 model Region {
-  regionCode String   @id @map("region_code") @db.VarChar(10) // 시도교육청 코드
-  regionName String   @map("region_name") @db.VarChar(50) // 시도명
-  subRegion  String?  @map("sub_region") @db.VarChar(50) // 시군구
-
-  schools     School[]
+  regionCode  String        @id @map("region_code") @db.VarChar(10)
+  regionName  String        @map("region_name") @db.VarChar(50)
+  subRegion   String?       @map("sub_region") @db.VarChar(50)
   reportCache ReportCache[]
+  schools     School[]
 
   @@map("region")
 }
 
-// FEAT-0: 학교 기본 정보 (기준 키: school_code)
 model School {
-  schoolCode    String   @id @map("school_code") @db.VarChar(20) // 학교코드
-  schoolName    String   @map("school_name") @db.VarChar(100) // 학교명
-  schoolType    String   @map("school_type") @db.VarChar(20) // 학교급: elementary/middle/high
-  regionCode    String   @map("region_code") @db.VarChar(10) // 시도교육청 코드
-  district      String   @db.VarChar(50) // 시군구
-  latitude      Float? // 위도
-  longitude     Float? // 경도
-  address       String?  @db.VarChar(300) // 주소
-  dataUpdatedAt DateTime @map("data_updated_at") // 데이터 갱신일
-
-  region             Region              @relation(fields: [regionCode], references: [regionCode])
-  teacherStats       TeacherStats[]
-  financeStats       FinanceStats[]
+  schoolCode         String               @id @map("school_code") @db.VarChar(20)
+  schoolName         String               @map("school_name") @db.VarChar(100)
+  schoolType         String               @map("school_type") @db.VarChar(20)
+  regionCode         String               @map("region_code") @db.VarChar(10)
+  district           String               @db.VarChar(50)
+  latitude           Float?
+  longitude          Float?
+  address            String?              @db.VarChar(300)
+  foundationType     String?              @map("foundation_type") @db.VarChar(20) // 설립명 (국립/공립/사립)
+  foundationDate     String?              @map("foundation_date") @db.VarChar(20) // 설립일자
+  phoneNumber        String?              @map("phone_number") @db.VarChar(30) // 전화번호
+  homepageUrl        String?              @map("homepage_url") @db.VarChar(300) // 홈페이지주소
+  coeducationType    String?              @map("coeducation_type") @db.VarChar(20) // 남녀공학구분
+  highSchoolType     String?              @map("high_school_type") @db.VarChar(30) // 고교유형
+  dayNightType       String?              @map("day_night_type") @db.VarChar(10) // 주야구분
+  dataUpdatedAt      DateTime             @map("data_updated_at")
   afterschoolProgram AfterSchoolProgram[]
-  riskScore          RiskScore[]
+  financeStats       FinanceStats[]
   reportCache        ReportCache[]
+  riskScore          RiskScore[]
+  region             Region               @relation(fields: [regionCode], references: [regionCode])
+  teacherStats       TeacherStats[]
 
-  @@index([regionCode], name: "idx_school_region")
-  @@index([schoolType], name: "idx_school_type")
-  @@index([schoolName], name: "idx_school_name")
+  @@index([regionCode], map: "idx_school_region")
+  @@index([schoolType], map: "idx_school_type")
+  @@index([schoolName], map: "idx_school_name")
   @@map("school")
 }
 
-// FEAT-2: 교원 현황 (학교알리미)
 model TeacherStats {
   id                 String   @id @default(uuid())
-  schoolCode         String   @map("school_code") @db.VarChar(20) // 학교코드
-  year               Int // 기준 연도
-  studentsPerTeacher Float?   @map("students_per_teacher") // 교원1인당학생수
-  tempTeacherRatio   Float?   @map("temp_teacher_ratio") // 기간제교원비율
-  totalTeachers      Int?     @map("total_teachers") // 전체 교원 수
-  totalStudents      Int?     @map("total_students") // 전체 학생 수
-  source             String   @default("schoolinfo") @db.VarChar(50) // 출처
-  collectedAt        DateTime @default(now()) @map("collected_at") // 수집일
-
-  school School @relation(fields: [schoolCode], references: [schoolCode])
+  schoolCode         String   @map("school_code") @db.VarChar(20)
+  year               Int
+  studentsPerTeacher Float?   @map("students_per_teacher")
+  tempTeacherRatio   Float?   @map("temp_teacher_ratio")
+  totalTeachers      Int?     @map("total_teachers")
+  totalStudents      Int?     @map("total_students")
+  femaleTeachers     Int?     @map("female_teachers") // 여교원수
+  maleTeachers       Int?     @map("male_teachers") // 남교원수
+  lecturerCount      Int?     @map("lecturer_count") // 강사수
+  currentClasses     Int?     @map("current_classes") // 현재 학급수
+  authorizedClasses  Int?     @map("authorized_classes") // 인가 학급수
+  source             String   @default("schoolinfo") @db.VarChar(50)
+  collectedAt        DateTime @default(now()) @map("collected_at")
+  school             School   @relation(fields: [schoolCode], references: [schoolCode])
 
   @@unique([schoolCode, year], name: "idx_teacher_school_year")
-  @@index([year], name: "idx_teacher_year")
+  @@index([year], map: "idx_teacher_year")
   @@map("teacher_stats")
 }
 
-// FEAT-2: 재정 현황 (학교알리미)
 model FinanceStats {
   id               String   @id @default(uuid())
-  schoolCode       String   @map("school_code") @db.VarChar(20) // 학교코드
-  year             Int // 기준 연도
-  totalBudget      BigInt?  @map("total_budget") // 세입결산총액
-  educationBudget  BigInt?  @map("education_budget") // 교육활동비
-  budgetPerStudent Float?   @map("budget_per_student") // 학생1인당교육비
-  source           String   @default("schoolinfo") @db.VarChar(50) // 출처
-  collectedAt      DateTime @default(now()) @map("collected_at") // 수집일
-
-  school School @relation(fields: [schoolCode], references: [schoolCode])
+  schoolCode       String   @map("school_code") @db.VarChar(20)
+  year             Int
+  totalBudget      BigInt?  @map("total_budget")
+  educationBudget  BigInt?  @map("education_budget")
+  budgetPerStudent Float?   @map("budget_per_student")
+  source           String   @default("schoolinfo") @db.VarChar(50)
+  collectedAt      DateTime @default(now()) @map("collected_at")
+  school           School   @relation(fields: [schoolCode], references: [schoolCode])
 
   @@unique([schoolCode, year], name: "idx_finance_school_year")
   @@map("finance_stats")
 }
 
-// FEAT-2/3: 방과후 프로그램 (학교알리미)
 model AfterSchoolProgram {
-  id          String   @id @default(uuid())
-  schoolCode  String   @map("school_code") @db.VarChar(20) // 학교코드
-  year        Int // 기준 연도
-  subject     String   @db.VarChar(100) // 프로그램명
-  enrollment  Int? // 수강인원수
-  category    String?  @db.VarChar(50) // 분류: academic/art/sports/etc
-  source      String   @default("schoolinfo") @db.VarChar(50) // 출처
-  collectedAt DateTime @default(now()) @map("collected_at") // 수집일
+  id                        String   @id @default(uuid())
+  schoolCode                String   @map("school_code") @db.VarChar(20)
+  year                      Int
+  subject                   String   @db.VarChar(100)
+  enrollment                Int?
+  category                  String?  @db.VarChar(50)
+  academicEnrollment        Int?     @map("academic_enrollment") // 교과 수강학생수
+  extracurricularEnrollment Int?     @map("extracurricular_enrollment") // 특기적성 수강학생수
+  totalEnrollmentSum        Int?     @map("total_enrollment_sum") // 수강 연인원
+  source                    String   @default("schoolinfo") @db.VarChar(50)
+  collectedAt               DateTime @default(now()) @map("collected_at")
+  school                    School   @relation(fields: [schoolCode], references: [schoolCode])
 
-  school School @relation(fields: [schoolCode], references: [schoolCode])
-
-  @@index([schoolCode, year], name: "idx_afterschool_school_year")
+  @@index([schoolCode, year], map: "idx_afterschool_school_year")
   @@map("afterschool_program")
 }
 
-// FEAT-2: 위험도 스코어 (EarlyAlert 산출)
 model RiskScore {
   id                  String   @id @default(uuid())
-  schoolCode          String   @map("school_code") @db.VarChar(20) // 학교코드
-  year                Int // 기준 연도
-  score               Float // 위험도 스코어 (0~100)
-  contributingFactors Json?    @map("contributing_factors") // 기여 요인 랭킹
-  calculatedAt        DateTime @default(now()) @map("calculated_at") // 산출일
-
-  school School @relation(fields: [schoolCode], references: [schoolCode])
+  schoolCode          String   @map("school_code") @db.VarChar(20)
+  year                Int
+  score               Float
+  contributingFactors Json?    @map("contributing_factors")
+  calculatedAt        DateTime @default(now()) @map("calculated_at")
+  school              School   @relation(fields: [schoolCode], references: [schoolCode])
 
   @@unique([schoolCode, year], name: "idx_risk_school_year")
   @@map("risk_score")
 }
 
-// FEAT-1: AI 리포트 캐시
 model ReportCache {
   id               String   @id @default(uuid())
-  schoolCode       String?  @map("school_code") @db.VarChar(20) // 학교코드 (지역 리포트 시 NULL)
-  regionCode       String?  @map("region_code") @db.VarChar(10) // 지역코드 (학교 리포트 시 NULL)
-  reportType       String   @map("report_type") @db.VarChar(20) // policy/teacher/parent
-  reportContent    String   @map("report_content") @db.Text // AI 생성 리포트 본문
-  modelUsed        String   @map("model_used") @db.VarChar(50) // 사용된 AI 모델
-  inputDataSummary Json?    @map("input_data_summary") // 입력 데이터 요약
-  generatedAt      DateTime @default(now()) @map("generated_at") // 생성일
-  expiresAt        DateTime @map("expires_at") // 만료일
+  schoolCode       String?  @map("school_code") @db.VarChar(20)
+  regionCode       String?  @map("region_code") @db.VarChar(10)
+  reportType       String   @map("report_type") @db.VarChar(20)
+  reportContent    String   @map("report_content")
+  modelUsed        String   @map("model_used") @db.VarChar(50)
+  inputDataSummary Json?    @map("input_data_summary")
+  generatedAt      DateTime @default(now()) @map("generated_at")
+  expiresAt        DateTime @map("expires_at")
+  region           Region?  @relation(fields: [regionCode], references: [regionCode])
+  school           School?  @relation(fields: [schoolCode], references: [schoolCode])
 
-  school School? @relation(fields: [schoolCode], references: [schoolCode])
-  region Region? @relation(fields: [regionCode], references: [regionCode])
-
-  @@index([schoolCode, reportType], name: "idx_report_school_type")
-  @@index([regionCode, reportType], name: "idx_report_region_type")
-  @@index([expiresAt], name: "idx_report_expires")
+  @@index([schoolCode, reportType], map: "idx_report_school_type")
+  @@index([regionCode, reportType], map: "idx_report_region_type")
+  @@index([expiresAt], map: "idx_report_expires")
   @@map("report_cache")
 }
 
-// FEAT-0: API 응답 캐시
 model ApiCache {
   id           String   @id @default(uuid())
-  apiSource    String   @map("api_source") @db.VarChar(50) // schoolinfo/neis/kess
-  requestKey   String   @map("request_key") @db.VarChar(500) // 요청 식별키
-  responseData Json     @map("response_data") // 응답 데이터
-  cachedAt     DateTime @default(now()) @map("cached_at") // 캐시일
-  expiresAt    DateTime @map("expires_at") // 만료일
+  apiSource    String   @map("api_source") @db.VarChar(50)
+  requestKey   String   @map("request_key") @db.VarChar(500)
+  responseData Json     @map("response_data")
+  cachedAt     DateTime @default(now()) @map("cached_at")
+  expiresAt    DateTime @map("expires_at")
 
   @@unique([apiSource, requestKey], name: "idx_api_cache_key")
   @@map("api_cache")

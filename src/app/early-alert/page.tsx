@@ -3,105 +3,129 @@
 import { useState, useEffect } from "react";
 import { RiskScoreBadge } from "@/components/RiskScoreBadge";
 import { Header } from "@/components/Header";
+import { AiMarkdown } from "@/components/AiMarkdown";
+import { AiProgressBar } from "@/components/AiProgressBar";
+import { REGIONS } from "@/lib/constants/regions";
 
-/** 위험 수준 라벨 매핑 */
-const levelToLabel: Record<string, string> = {
-  safe: "안전",
-  caution: "주의",
-  warning: "경고",
-  danger: "위험",
-};
 
-interface ContributingFactor {
+interface FactorBreakdown {
   factor: string;
+  value: string;
+  rawScore: number;
   weight: number;
-  value: number;
-  description: string;
+  contribution: number;
 }
 
-interface RiskScore {
+interface TopRiskSchool {
   schoolCode: string;
   schoolName: string;
   score: number;
   level: "safe" | "caution" | "warning" | "danger";
-  contributingFactors: ContributingFactor[];
-  year: number;
+  factors: FactorBreakdown[];
 }
 
-/** 위험 수준별 텍스트 색상 클래스 */
-function levelColorClass(level: string): string {
-  switch (level) {
-    case "safe":
-      return "text-risk-safe";
-    case "caution":
-      return "text-risk-caution";
-    case "warning":
-      return "text-risk-warning";
-    case "danger":
-      return "text-risk-danger";
-    default:
-      return "text-text-secondary";
-  }
+interface EarlyAlertData {
+  total: number;
+  counts: { safe: number; caution: number; warning: number; danger: number };
+  avgScore: number;
+  topRisk: TopRiskSchool[];
 }
 
-const REGIONS = [
-  { code: "B10", name: "서울" }, { code: "C10", name: "부산" },
-  { code: "D10", name: "대구" }, { code: "E10", name: "인천" },
-  { code: "F10", name: "광주" }, { code: "G10", name: "대전" },
-  { code: "H10", name: "울산" }, { code: "J10", name: "경기" },
-  { code: "K10", name: "강원" }, { code: "M10", name: "충북" },
-  { code: "N10", name: "충남" }, { code: "P10", name: "전북" },
-  { code: "Q10", name: "전남" }, { code: "R10", name: "경북" },
-  { code: "S10", name: "경남" }, { code: "T10", name: "제주" },
-];
 
 export default function EarlyAlertPage() {
-  const [riskScores, setRiskScores] = useState<RiskScore[]>([]);
+  const [data, setData] = useState<EarlyAlertData | null>(null);
+  const [narratives, setNarratives] = useState<Record<string, string>>({});
+  const [regionSummary, setRegionSummary] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedRegion, setSelectedRegion] = useState("B10");
+  const [selectedDistrict, setSelectedDistrict] = useState("");
+  const [districts, setDistricts] = useState<Array<{ district: string; schoolCount: number }>>([]);
+  const [policyPriority, setPolicyPriority] = useState("");
+  const [policyLoading, setPolicyLoading] = useState(false);
+  const [showPolicy, setShowPolicy] = useState(false);
+
+  const regionName = REGIONS.find((r) => r.code === selectedRegion)?.name ?? "전체";
+
+  // 시도 변경 → 시군구 목록 로드
+  useEffect(() => {
+    setSelectedDistrict("");
+    if (selectedRegion) {
+      fetch(`/api/districts?region=${selectedRegion}`)
+        .then((r) => r.json())
+        .then((body) => setDistricts(body.data ?? []))
+        .catch(() => setDistricts([]));
+    } else {
+      setDistricts([]);
+    }
+  }, [selectedRegion]);
+
+  // SSE 스트림 URL (지역/시군구 변경 시 갱신)
+  const [streamUrl, setStreamUrl] = useState<string | null>(null);
+  const [policyStreamUrl, setPolicyStreamUrl] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchRiskScores() {
-      setLoading(true);
-      setCurrentPage(1);
-      try {
-        const res = await fetch(`/api/early-alert?region=${selectedRegion}`);
-        const body = await res.json();
+    setLoading(true);
+    setCurrentPage(1);
+    setPolicyPriority("");
+    setShowPolicy(false);
+    const params = new URLSearchParams({ region: selectedRegion });
+    if (selectedDistrict) params.set("district", selectedDistrict);
+    setStreamUrl(`/api/early-alert/stream?${params}`);
+  }, [selectedRegion, selectedDistrict]);
 
-        if (res.ok && Array.isArray(body.data)) {
-          setRiskScores(body.data);
-        } else {
-          setError("위험도 데이터를 불러오지 못했습니다.");
-        }
-      } catch {
-        setError("서버 연결에 실패했습니다. 잠시 후 다시 시도해 주세요.");
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchRiskScores();
-  }, [selectedRegion]);
+  // SSE 완료 콜백
+  function handleStreamComplete(result: unknown) {
+    const body = result as {
+      data: EarlyAlertData;
+      narratives: Record<string, string>;
+      regionSummary: string;
+    };
+    setData(body.data);
+    setNarratives(body.narratives ?? {});
+    setRegionSummary(body.regionSummary ?? "");
+    setLoading(false);
+    setStreamUrl(null);
+  }
+
+  function handleStreamError(msg: string) {
+    setError(msg);
+    setLoading(false);
+    setStreamUrl(null);
+  }
+
+  // 정책 개입 우선순위 — SSE
+  function fetchPolicyPriority() {
+    setPolicyLoading(true);
+    setShowPolicy(true);
+    setPolicyStreamUrl(`/api/ai-insight/stream?type=policy-priority&region=${selectedRegion}`);
+  }
+
+  function handlePolicyComplete(result: unknown) {
+    const body = result as { data: string };
+    setPolicyPriority(body.data);
+    setPolicyLoading(false);
+    setPolicyStreamUrl(null);
+  }
+
+  function handlePolicyError() {
+    setPolicyPriority("정책 분석 생성에 실패했습니다.");
+    setPolicyLoading(false);
+    setPolicyStreamUrl(null);
+  }
 
   const [currentPage, setCurrentPage] = useState(1);
   const [searchFilter, setSearchFilter] = useState("");
-  const PAGE_SIZE = 30;
+  const PAGE_SIZE = 20;
 
   // 검색 필터
+  const topRisk = data?.topRisk ?? [];
   const filteredScores = searchFilter
-    ? riskScores.filter((s) => s.schoolName.includes(searchFilter))
-    : riskScores;
-
-  // 요약 집계
-  const totalSchools = filteredScores.length;
-  const dangerCount = filteredScores.filter((s) => s.level === "danger").length;
-  const warningCount = filteredScores.filter((s) => s.level === "warning").length;
-  const safeCount = filteredScores.filter(
-    (s) => s.level === "safe" || s.level === "caution"
-  ).length;
+    ? topRisk.filter((s) => s.schoolName.includes(searchFilter))
+    : topRisk;
 
   // 페이지네이션
-  const totalPages = Math.ceil(totalSchools / PAGE_SIZE);
+  const totalPages = Math.ceil(filteredScores.length / PAGE_SIZE);
   const pagedScores = filteredScores.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
   return (
@@ -117,12 +141,29 @@ export default function EarlyAlertPage() {
           <select
             value={selectedRegion}
             onChange={(e) => { setSelectedRegion(e.target.value); setSearchFilter(""); }}
-            className="h-10 px-4 rounded-lg border border-border bg-surface text-sm font-medium"
+            className="h-11 px-4 rounded-lg border border-border bg-surface text-sm font-medium"
           >
             {REGIONS.map((r) => (
               <option key={r.code} value={r.code}>{r.name}</option>
             ))}
           </select>
+          {districts.length > 0 && (
+            <select
+              value={selectedDistrict}
+              onChange={(e) => { setSelectedDistrict(e.target.value); setSearchFilter(""); }}
+              className="h-11 px-4 rounded-lg border border-border bg-surface text-sm font-medium"
+            >
+              <option value="">전체({regionName})</option>
+              {districts.map((d) => {
+                const short = d.district.split(" ").slice(1).join(" ") || d.district;
+                return (
+                  <option key={d.district} value={d.district}>
+                    {short} ({d.schoolCount})
+                  </option>
+                );
+              })}
+            </select>
+          )}
           <input
             type="text"
             placeholder="학교명 검색..."
@@ -138,67 +179,118 @@ export default function EarlyAlertPage() {
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">전체 학교</p>
             <p className="text-3xl font-bold mt-1">
-              {loading ? "—" : totalSchools}
+              {loading ? "—" : data?.total ?? 0}
               <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
             </p>
           </div>
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">위험</p>
             <p className="text-3xl font-bold mt-1 text-risk-danger">
-              {loading ? "—" : dangerCount}
+              {loading ? "—" : data?.counts.danger ?? 0}
               <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
             </p>
           </div>
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">경고</p>
             <p className="text-3xl font-bold mt-1 text-risk-warning">
-              {loading ? "—" : warningCount}
+              {loading ? "—" : data?.counts.warning ?? 0}
               <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
             </p>
           </div>
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">안전 / 주의</p>
             <p className="text-3xl font-bold mt-1 text-risk-safe">
-              {loading ? "—" : safeCount}
+              {loading ? "—" : (data?.counts.safe ?? 0) + (data?.counts.caution ?? 0)}
               <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
             </p>
           </div>
         </section>
 
+        {/* AI 지역 패턴 요약 */}
+        {regionSummary && (
+          <section className="mb-8 bg-primary/5 border border-primary/20 rounded-lg p-5">
+            <div className="flex items-start gap-3">
+              <span className="text-primary text-lg mt-0.5">AI</span>
+              <div>
+                <h3 className="text-sm font-semibold text-primary mb-1">지역 인사이트</h3>
+                <p className="text-sm text-text-primary leading-relaxed">{regionSummary}</p>
+              </div>
+            </div>
+          </section>
+        )}
+
+        {/* AI 정책 개입 우선순위 */}
+        {!showPolicy ? (
+          <div className="mb-8">
+            <button
+              onClick={fetchPolicyPriority}
+              className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-light transition-colors"
+            >
+              AI 정책 개입 우선순위 분석
+            </button>
+          </div>
+        ) : (
+          <section className="mb-8 bg-surface border border-border rounded-lg p-6 shadow-sm">
+            <h3 className="text-lg font-semibold text-text-primary mb-3 flex items-center gap-2">
+              <span className="text-primary">AI</span> 정책 개입 우선순위
+            </h3>
+            {policyLoading ? (
+              <AiProgressBar
+                streamUrl={policyStreamUrl ?? undefined}
+                onComplete={handlePolicyComplete}
+                onError={handlePolicyError}
+              />
+            ) : (
+              <div>
+                <AiMarkdown content={policyPriority} />
+              </div>
+            )}
+          </section>
+        )}
+
         {/* 학교 위험도 테이블 */}
         <section>
           <h3 className="text-[22px] font-semibold text-text-primary mb-4">
-            학교별 위험도 현황
+            위험 학교 현황
+            {data && (
+              <span className="text-sm font-normal text-text-secondary ml-2">
+                (경고 이상 {topRisk.length}개교)
+              </span>
+            )}
           </h3>
 
           {loading ? (
-            <div className="animate-pulse space-y-4">
-              {[1, 2, 3, 4, 5].map((i) => (
-                <div key={i} className="h-14 bg-border rounded-lg" />
-              ))}
+            <div className="bg-surface border border-border rounded-lg p-6 shadow-sm">
+              <AiProgressBar
+                streamUrl={streamUrl ?? undefined}
+                onComplete={handleStreamComplete}
+                onError={handleStreamError}
+              />
             </div>
           ) : error ? (
             <div className="bg-surface border border-border rounded-lg p-8 text-center">
               <p className="text-risk-danger">{error}</p>
             </div>
-          ) : riskScores.length === 0 ? (
-            <p className="text-text-secondary">표시할 데이터가 없습니다.</p>
+          ) : topRisk.length === 0 ? (
+            <div className="bg-surface border border-border rounded-lg p-8 text-center">
+              <p className="text-risk-safe font-medium">이 지역에 경고 이상 학교가 없습니다.</p>
+            </div>
           ) : (<>
-            <div className="bg-surface border border-border rounded-lg shadow-sm overflow-hidden">
+            <div className="bg-surface border border-border rounded-lg shadow-sm overflow-hidden max-h-[calc(100vh-340px)] overflow-y-auto">
               <table className="w-full text-left">
-                <thead>
+                <thead className="sticky top-0 z-10">
                   <tr className="border-b border-border bg-background">
-                    <th className="px-6 py-3 text-sm font-semibold text-text-secondary">
+                    <th className="px-4 py-3 text-sm font-semibold text-text-secondary w-[160px]">
                       학교명
                     </th>
-                    <th className="px-6 py-3 text-sm font-semibold text-text-secondary">
-                      위험도 점수
+                    <th className="px-4 py-3 text-sm font-semibold text-text-secondary w-[100px]">
+                      총점
                     </th>
-                    <th className="px-6 py-3 text-sm font-semibold text-text-secondary">
-                      위험 수준
+                    <th className="px-4 py-3 text-sm font-semibold text-text-secondary">
+                      점수 산출 근거
                     </th>
-                    <th className="px-6 py-3 text-sm font-semibold text-text-secondary">
-                      주요 기여 요인
+                    <th className="px-4 py-3 text-sm font-semibold text-text-secondary w-[280px]">
+                      AI 분석
                     </th>
                   </tr>
                 </thead>
@@ -208,44 +300,47 @@ export default function EarlyAlertPage() {
                       key={school.schoolCode}
                       className="border-b border-border last:border-b-0 hover:bg-background/50 transition-colors"
                     >
-                      {/* 학교명 (학교 이름) */}
-                      <td className="px-6 py-4 text-sm font-medium text-text-primary">
+                      <td className="px-4 py-3 text-sm font-medium text-text-primary">
                         {school.schoolName}
                       </td>
-
-                      {/* 위험도 점수 — RiskScoreBadge 컴포넌트 사용 */}
-                      <td className="px-6 py-4">
-                        <div className="w-28">
+                      <td className="px-4 py-3">
+                        <div className="w-20">
                           <RiskScoreBadge score={school.score} level={school.level} />
                         </div>
                       </td>
-
-                      {/* 위험 수준 라벨 */}
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-block rounded-full px-3 py-1 text-xs font-semibold ${levelColorClass(school.level)}`}
-                        >
-                          {levelToLabel[school.level] ?? school.level}
-                        </span>
-                      </td>
-
-                      {/* 주요 기여 요인 (상위 3개) */}
-                      <td className="px-6 py-4 text-sm text-text-secondary">
-                        {school.contributingFactors.length > 0 ? (
-                          <ul className="space-y-1">
-                            {school.contributingFactors.slice(0, 3).map((f) => (
-                              <li key={f.factor}>
-                                <span className="font-medium text-text-primary">
-                                  {f.description}
-                                </span>{" "}
-                                <span className="text-xs text-text-secondary">
-                                  (가중치 {(f.weight * 100).toFixed(0)}%)
+                      <td className="px-4 py-3">
+                        {school.factors && school.factors.length > 0 ? (
+                          <div className="space-y-1">
+                            {school.factors.map((f) => (
+                              <div key={f.factor} className="flex items-center gap-2 text-xs">
+                                <span className="text-text-secondary w-[100px] shrink-0">{f.factor}</span>
+                                <span className="font-medium text-text-primary w-[64px] shrink-0">{f.value}</span>
+                                <div className="flex-1 flex items-center gap-1">
+                                  <div className="flex-1 bg-border rounded-full h-1.5 max-w-[80px]">
+                                    <div
+                                      className={`h-1.5 rounded-full ${f.rawScore >= 70 ? "bg-risk-danger" : f.rawScore >= 40 ? "bg-risk-warning" : "bg-risk-safe"}`}
+                                      style={{ width: `${f.rawScore}%` }}
+                                    />
+                                  </div>
+                                  <span className={`font-bold w-[28px] text-right ${f.rawScore >= 70 ? "text-risk-danger" : f.rawScore >= 40 ? "text-risk-warning" : "text-risk-safe"}`}>
+                                    {f.rawScore}
+                                  </span>
+                                </div>
+                                <span className="text-text-secondary/60 w-[48px] shrink-0 text-right">
+                                  +{f.contribution}점
                                 </span>
-                              </li>
+                              </div>
                             ))}
-                          </ul>
+                          </div>
                         ) : (
-                          <span>—</span>
+                          <span className="text-text-secondary/50 text-xs">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-xs text-text-secondary">
+                        {narratives[school.schoolCode] ? (
+                          <p className="leading-relaxed line-clamp-3">{narratives[school.schoolCode]}</p>
+                        ) : (
+                          <span className="text-text-secondary/50">—</span>
                         )}
                       </td>
                     </tr>
