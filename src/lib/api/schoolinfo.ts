@@ -135,11 +135,11 @@ export async function fetchAllPages<T>(
 
     allRows.push(...result.list);
 
-    // 마지막 페이지 판단: 받은 건수 < pSize이면 종료
-    if (result.list.length < pSize) break;
-
-    // totalCount 기반 종료 판단
+    // totalCount 기반 종료 판단 (API가 pSize를 무시할 수 있으므로 우선 적용)
     if (result.totalCount && allRows.length >= result.totalCount) break;
+
+    // totalCount 없을 때 fallback: 받은 건수 < pSize이면 종료
+    if (!result.totalCount && result.list.length < pSize) break;
 
     pIndex++;
     // 공공 API 부하 방지 딜레이

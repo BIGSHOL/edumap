@@ -45,6 +45,7 @@ export async function getSchoolList(filters: {
   region?: string;
   type?: string;
   search?: string;
+  district?: string;
   page: number;
   limit: number;
 }): Promise<{ data: SchoolItem[]; total: number; source: DataSource }> {
@@ -54,6 +55,7 @@ export async function getSchoolList(filters: {
     if (filters.region) where.regionCode = filters.region;
     if (filters.type) where.schoolType = filters.type;
     if (filters.search) where.schoolName = { contains: filters.search };
+    if (filters.district) where.district = filters.district;
 
     const [total, schools] = await Promise.all([
       prisma.school.count({ where }),

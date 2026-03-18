@@ -71,11 +71,11 @@ export function RegionRiskMap({ data, selectedRegion, onRegionClick }: RegionRis
       attributionControl: false,
     });
 
-    // 한글 지도 타일 (Vworld 국토정보플랫폼)
-    L.tileLayer("https://api.vworld.kr/req/wmts/1.0.0/3F833442-B21B-3A49-8F47-A795B95B5429/Base/{z}/{y}/{x}.png", {
-      maxZoom: 18,
+    // OpenStreetMap 한글 타일
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      maxZoom: 12,
       minZoom: 6,
-      attribution: "&copy; VWorld",
+      attribution: "&copy; OpenStreetMap",
     }).addTo(map);
 
     // 시도별 원형 마커

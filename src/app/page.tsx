@@ -61,21 +61,45 @@ export default function Home() {
 
   const regionName =
     REGIONS.find((r) => r.code === selectedRegion)?.name ?? "전체";
+  // 시군구 선택 시 짧은 이름 (예: "서울특별시 강남구" → "강남구")
+  const districtShort = selectedDistrict
+    ? selectedDistrict.split(" ").slice(1).join(" ") || selectedDistrict
+    : "";
+  const locationName = districtShort || regionName;
   const totalPages = Math.ceil(totalSchools / PAGE_SIZE);
+
+  // 시군구 선택 시: 학교 목록 기준으로 위험도 데이터 필터
+  const schoolCodesSet = new Set(schools.map((s) => s.schoolCode));
+  const filteredRiskData = selectedDistrict
+    ? riskData.filter((r) => schoolCodesSet.has(r.schoolCode))
+    : riskData;
+  const displaySummary = selectedDistrict
+    ? {
+        total: totalSchools,
+        danger: filteredRiskData.filter((s) => s.level === "danger" || s.level === "warning").length,
+        avgScore: filteredRiskData.length > 0
+          ? Math.round(filteredRiskData.reduce((sum, s) => sum + s.score, 0) / filteredRiskData.length)
+          : 0,
+      }
+    : riskSummary;
 
   // 학교 목록 로드 (페이지네이션)
   const loadSchools = useCallback(
-    async (region: string, page: number, search?: string) => {
+    async (region: string, page: number, opts?: { search?: string; district?: string }) => {
       setLoading(true);
       try {
         const params = new URLSearchParams({
           limit: String(PAGE_SIZE),
           page: String(page),
         });
-        if (search) {
-          params.set("search", search);
-        } else {
+        if (opts?.search) {
+          params.set("search", opts.search);
+        }
+        if (region) {
           params.set("region", region);
+        }
+        if (opts?.district) {
+          params.set("district", opts.district);
         }
 
         const res = await fetch(`/api/schools?${params}`);
@@ -96,8 +120,9 @@ export default function Home() {
   // 위험도 데이터 로드 (지역 변경 시만)
   const loadRiskData = useCallback(async (region: string) => {
     try {
+      const regionParam = region ? `region=${region}&` : "";
       const res = await fetch(
-        `/api/early-alert?region=${region}&limit=30`
+        `/api/early-alert?${regionParam}limit=500`
       );
       const body = await res.json();
       if (res.ok && Array.isArray(body.data)) {
@@ -154,29 +179,26 @@ export default function Home() {
   useEffect(() => {
     setCurrentPage(1);
     setSearchQuery("");
-    // 시군구 선택 시 해당 구 검색, 아니면 시도 전체
-    if (selectedDistrict) {
-      loadSchools(selectedRegion, 1, selectedDistrict);
-    } else {
-      loadSchools(selectedRegion, 1);
-    }
+    loadSchools(selectedRegion, 1, { district: selectedDistrict || undefined });
     loadRiskData(selectedRegion);
   }, [selectedRegion, selectedDistrict, loadSchools, loadRiskData]);
 
   // 페이지 변경
   useEffect(() => {
-    loadSchools(selectedRegion, currentPage, searchQuery || undefined);
-  }, [currentPage, selectedRegion, searchQuery, loadSchools]);
+    loadSchools(selectedRegion, currentPage, {
+      search: searchQuery || undefined,
+      district: selectedDistrict || undefined,
+    });
+  }, [currentPage, selectedRegion, selectedDistrict, searchQuery, loadSchools]);
 
   // 검색
   const handleSearch = (query: string) => {
     setSearchQuery(query);
     setCurrentPage(1);
-    if (!query.trim()) {
-      loadSchools(selectedRegion, 1);
-    } else {
-      loadSchools(selectedRegion, 1, query);
-    }
+    loadSchools(selectedRegion, 1, {
+      search: query || undefined,
+      district: selectedDistrict || undefined,
+    });
   };
 
   return (
@@ -224,10 +246,10 @@ export default function Home() {
         <section className="grid grid-cols-3 gap-6 mb-8">
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">
-              {regionName} 초등학교
+              {locationName} 초등학교
             </p>
             <p className="text-3xl font-bold mt-1">
-              {loading ? "—" : riskSummary.total}
+              {loading ? "—" : displaySummary.total}
               <span className="text-sm font-normal text-text-secondary ml-1">
                 개교
               </span>
@@ -236,7 +258,7 @@ export default function Home() {
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">주의 이상 학교</p>
             <p className="text-3xl font-bold mt-1 text-risk-danger">
-              {loading ? "—" : riskSummary.danger}
+              {loading ? "—" : displaySummary.danger}
               <span className="text-sm font-normal text-text-secondary ml-1">
                 개교
               </span>
@@ -244,10 +266,10 @@ export default function Home() {
           </div>
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">
-              {regionName} 평균 위험도
+              {locationName} 평균 위험도
             </p>
             <p className="text-3xl font-bold mt-1">
-              {loading ? "—" : riskSummary.avgScore}
+              {loading ? "—" : displaySummary.avgScore}
               <span className="text-sm font-normal text-text-secondary ml-1">
                 점
               </span>
@@ -274,14 +296,14 @@ export default function Home() {
           {/* 선택 지역 위험도 수준별 분포 */}
           <div className="col-span-1 bg-surface border border-border rounded-lg p-4 shadow-sm">
             <h3 className="text-sm font-semibold text-text-primary mb-3">
-              {regionName} 분포
+              {locationName} 분포
             </h3>
-            <RiskDistribution data={riskData} total={riskSummary.total} />
+            <RiskDistribution data={filteredRiskData} total={displaySummary.total} />
           </div>
           {/* 위험 학교 목록 */}
           <div className="col-span-2 bg-surface border border-border rounded-lg p-5 shadow-sm max-h-[360px] overflow-auto">
             <h3 className="text-sm font-semibold text-text-primary mb-3">
-              위험도 상위 학교
+              {locationName} 위험도 상위 학교
             </h3>
             {loading ? (
               <div className="animate-pulse space-y-2">
@@ -292,9 +314,15 @@ export default function Home() {
             ) : (
               <div className="space-y-1.5">
                 {riskData
-                  .filter(
-                    (r) => r.level === "danger" || r.level === "warning"
-                  )
+                  .filter((r) => {
+                    if (r.level !== "danger" && r.level !== "warning") return false;
+                    // 시군구 선택 시 해당 구 학교만
+                    if (selectedDistrict) {
+                      const schoolCodes = new Set(schools.map((s) => s.schoolCode));
+                      return schoolCodes.has(r.schoolCode);
+                    }
+                    return true;
+                  })
                   .sort((a, b) => b.score - a.score)
                   .slice(0, 20)
                   .map((r) => (
@@ -326,7 +354,7 @@ export default function Home() {
             <h2 className="text-[22px] font-semibold text-text-primary">
               {searchQuery
                 ? `"${searchQuery}" 검색 결과 (${totalSchools}개)`
-                : `${regionName} 학교 목록 (${totalSchools}개)`}
+                : `${locationName} 학교 목록 (${totalSchools}개)`}
             </h2>
             {totalPages > 1 && (
               <p className="text-sm text-text-secondary">
