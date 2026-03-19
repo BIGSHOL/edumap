@@ -60,41 +60,66 @@ export default function EarlyAlertPage() {
     }
   }, [selectedRegion]);
 
-  // SSE 스트림 URL (지역/시군구 변경 시 갱신)
-  const [streamUrl, setStreamUrl] = useState<string | null>(null);
-  const [policyStreamUrl, setPolicyStreamUrl] = useState<string | null>(null);
-
+  // 1단계: 데이터만 빠르게 로드 (AI 없이)
   useEffect(() => {
-    setLoading(true);
-    setCurrentPage(1);
-    setPolicyPriority("");
-    setShowPolicy(false);
-    const params = new URLSearchParams({ region: selectedRegion });
-    if (selectedDistrict) params.set("district", selectedDistrict);
-    setStreamUrl(`/api/early-alert/stream?${params}`);
+    async function fetchData() {
+      setLoading(true);
+      setCurrentPage(1);
+      setNarratives({});
+      setRegionSummary("");
+      setPolicyPriority("");
+      setShowPolicy(false);
+      setNarrativeStreamUrl(null);
+      try {
+        const params = new URLSearchParams({ region: selectedRegion, narrative: "false" });
+        if (selectedDistrict) params.set("district", selectedDistrict);
+        const res = await fetch(`/api/early-alert?${params}`);
+        const body = await res.json();
+        if (res.ok && body.data) {
+          setData(body.data);
+        } else {
+          setError("위험도 데이터를 불러오지 못했습니다.");
+        }
+      } catch {
+        setError("서버 연결에 실패했습니다.");
+      } finally {
+        setLoading(false);
+      }
+    }
+    fetchData();
   }, [selectedRegion, selectedDistrict]);
 
-  // SSE 완료 콜백
-  function handleStreamComplete(result: unknown) {
+  // 2단계: AI 해설 — 버튼 클릭 시 SSE 스트림
+  const [narrativeStreamUrl, setNarrativeStreamUrl] = useState<string | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(false);
+
+  function fetchNarratives() {
+    setNarrativeLoading(true);
+    const params = new URLSearchParams({ region: selectedRegion });
+    if (selectedDistrict) params.set("district", selectedDistrict);
+    setNarrativeStreamUrl(`/api/early-alert/stream?${params}`);
+  }
+
+  function handleNarrativeComplete(result: unknown) {
     const body = result as {
       data: EarlyAlertData;
       narratives: Record<string, string>;
       regionSummary: string;
     };
-    setData(body.data);
     setNarratives(body.narratives ?? {});
     setRegionSummary(body.regionSummary ?? "");
-    setLoading(false);
-    setStreamUrl(null);
+    setNarrativeLoading(false);
+    setNarrativeStreamUrl(null);
   }
 
-  function handleStreamError(msg: string) {
-    setError(msg);
-    setLoading(false);
-    setStreamUrl(null);
+  function handleNarrativeError() {
+    setNarrativeLoading(false);
+    setNarrativeStreamUrl(null);
   }
 
-  // 정책 개입 우선순위 — SSE
+  // 정책 개입 우선순위 — 버튼 클릭 시 SSE 스트림
+  const [policyStreamUrl, setPolicyStreamUrl] = useState<string | null>(null);
+
   function fetchPolicyPriority() {
     setPolicyLoading(true);
     setShowPolicy(true);
@@ -207,42 +232,80 @@ export default function EarlyAlertPage() {
         </section>
 
         {/* AI 지역 패턴 요약 */}
-        {regionSummary && (
-          <section className="mb-8 bg-primary/5 border border-primary/20 rounded-lg p-5">
-            <div className="flex items-start gap-3">
-              <span className="text-primary text-lg mt-0.5">AI</span>
-              <div>
-                <h3 className="text-sm font-semibold text-primary mb-1">지역 인사이트</h3>
-                <p className="text-sm text-text-primary leading-relaxed">{regionSummary}</p>
+        {/* AI 분석 영역 — 버튼 클릭 시에만 실행 */}
+        {!loading && data && data.total > 0 && (
+          <section className="mb-8">
+            {/* AI 해설 + 정책 분석 버튼 */}
+            {!regionSummary && !narrativeLoading && Object.keys(narratives).length === 0 && !showPolicy ? (
+              <div className="flex gap-3">
+                <button
+                  onClick={fetchNarratives}
+                  className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-light transition-colors"
+                >
+                  AI 학교별 위험 분석
+                </button>
+                <button
+                  onClick={fetchPolicyPriority}
+                  className="px-5 py-2.5 border border-primary text-primary rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors"
+                >
+                  AI 정책 개입 우선순위
+                </button>
               </div>
-            </div>
-          </section>
-        )}
+            ) : null}
 
-        {/* AI 정책 개입 우선순위 */}
-        {!showPolicy ? (
-          <div className="mb-8">
-            <button
-              onClick={fetchPolicyPriority}
-              className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-light transition-colors"
-            >
-              AI 정책 개입 우선순위 분석
-            </button>
-          </div>
-        ) : (
-          <section className="mb-8 bg-surface border border-border rounded-lg p-6 shadow-sm">
-            <h3 className="text-lg font-semibold text-text-primary mb-3 flex items-center gap-2">
-              <span className="text-primary">AI</span> 정책 개입 우선순위
-            </h3>
-            {policyLoading ? (
-              <AiProgressBar
-                streamUrl={policyStreamUrl ?? undefined}
-                onComplete={handlePolicyComplete}
-                onError={handlePolicyError}
-              />
-            ) : (
-              <div>
-                <AiMarkdown content={policyPriority} />
+            {/* AI 해설 로딩 프로그레스 */}
+            {narrativeLoading && (
+              <div className="bg-surface border border-border rounded-lg p-6 shadow-sm mb-4">
+                <h3 className="text-sm font-semibold text-text-primary mb-3 flex items-center gap-2">
+                  <span className="text-primary">AI</span> 학교별 위험 분석 중
+                </h3>
+                <AiProgressBar
+                  streamUrl={narrativeStreamUrl ?? undefined}
+                  onComplete={handleNarrativeComplete}
+                  onError={handleNarrativeError}
+                />
+              </div>
+            )}
+
+            {/* 지역 인사이트 (AI 해설 완료 후) */}
+            {regionSummary && (
+              <div className="bg-primary/5 border border-primary/20 rounded-lg p-5 mb-4">
+                <div className="flex items-start gap-3">
+                  <span className="text-primary text-lg mt-0.5">AI</span>
+                  <div>
+                    <h3 className="text-sm font-semibold text-primary mb-1">지역 인사이트</h3>
+                    <p className="text-sm text-text-primary leading-relaxed">{regionSummary}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* 정책 분석 (해설 완료 후 또는 직접 클릭) */}
+            {regionSummary && !showPolicy && (
+              <div className="mb-4">
+                <button
+                  onClick={fetchPolicyPriority}
+                  className="px-5 py-2.5 border border-primary text-primary rounded-lg text-sm font-medium hover:bg-primary/5 transition-colors"
+                >
+                  AI 정책 개입 우선순위
+                </button>
+              </div>
+            )}
+
+            {showPolicy && (
+              <div className="bg-surface border border-border rounded-lg p-6 shadow-sm mb-4">
+                <h3 className="text-lg font-semibold text-text-primary mb-3 flex items-center gap-2">
+                  <span className="text-primary">AI</span> 정책 개입 우선순위
+                </h3>
+                {policyLoading ? (
+                  <AiProgressBar
+                    streamUrl={policyStreamUrl ?? undefined}
+                    onComplete={handlePolicyComplete}
+                    onError={handlePolicyError}
+                  />
+                ) : (
+                  <AiMarkdown content={policyPriority} />
+                )}
               </div>
             )}
           </section>
@@ -260,12 +323,12 @@ export default function EarlyAlertPage() {
           </h3>
 
           {loading ? (
-            <div className="bg-surface border border-border rounded-lg p-6 shadow-sm">
-              <AiProgressBar
-                streamUrl={streamUrl ?? undefined}
-                onComplete={handleStreamComplete}
-                onError={handleStreamError}
-              />
+            <div className="bg-surface border border-border rounded-lg p-8 text-center">
+              <div className="animate-pulse space-y-3">
+                <div className="h-4 bg-border/60 rounded w-1/3 mx-auto" />
+                <div className="h-3 bg-border/40 rounded w-1/2 mx-auto" />
+              </div>
+              <p className="text-sm text-text-secondary mt-3">데이터를 불러오는 중...</p>
             </div>
           ) : error ? (
             <div className="bg-surface border border-border rounded-lg p-8 text-center">
@@ -277,21 +340,32 @@ export default function EarlyAlertPage() {
             </div>
           ) : (<>
             <div className="bg-surface border border-border rounded-lg shadow-sm overflow-hidden max-h-[calc(100vh-340px)] overflow-y-auto">
-              <table className="w-full text-left">
+              {(() => {
+                const hasNarrative = Object.keys(narratives).length > 0;
+                return (
+              <table className="w-full text-left table-fixed">
+                <colgroup>
+                  <col style={{ width: hasNarrative ? "13%" : "16%" }} />
+                  <col style={{ width: hasNarrative ? "8%" : "10%" }} />
+                  <col style={{ width: hasNarrative ? "36%" : "74%" }} />
+                  {hasNarrative && <col style={{ width: "43%" }} />}
+                </colgroup>
                 <thead className="sticky top-0 z-10">
                   <tr className="border-b border-border bg-background">
-                    <th className="px-4 py-3 text-sm font-semibold text-text-secondary w-[160px]">
+                    <th className="px-4 py-3 text-sm font-semibold text-text-secondary">
                       학교명
                     </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-text-secondary w-[100px]">
+                    <th className="px-4 py-3 text-sm font-semibold text-text-secondary text-center">
                       총점
                     </th>
                     <th className="px-4 py-3 text-sm font-semibold text-text-secondary">
                       점수 산출 근거
                     </th>
-                    <th className="px-4 py-3 text-sm font-semibold text-text-secondary w-[280px]">
-                      AI 분석
-                    </th>
+                    {hasNarrative && (
+                      <th className="px-4 py-3 text-sm font-semibold text-text-secondary">
+                        AI 분석
+                      </th>
+                    )}
                   </tr>
                 </thead>
                 <tbody>
@@ -310,43 +384,49 @@ export default function EarlyAlertPage() {
                       </td>
                       <td className="px-4 py-3">
                         {school.factors && school.factors.length > 0 ? (
-                          <div className="space-y-1">
-                            {school.factors.map((f) => (
-                              <div key={f.factor} className="flex items-center gap-2 text-xs">
-                                <span className="text-text-secondary w-[100px] shrink-0">{f.factor}</span>
-                                <span className="font-medium text-text-primary w-[64px] shrink-0">{f.value}</span>
-                                <div className="flex-1 flex items-center gap-1">
-                                  <div className="flex-1 bg-border rounded-full h-1.5 max-w-[80px]">
-                                    <div
-                                      className={`h-1.5 rounded-full ${f.rawScore >= 70 ? "bg-risk-danger" : f.rawScore >= 40 ? "bg-risk-warning" : "bg-risk-safe"}`}
-                                      style={{ width: `${f.rawScore}%` }}
-                                    />
-                                  </div>
-                                  <span className={`font-bold w-[28px] text-right ${f.rawScore >= 70 ? "text-risk-danger" : f.rawScore >= 40 ? "text-risk-warning" : "text-risk-safe"}`}>
+                          <table className="w-full">
+                            <tbody>
+                              {school.factors.map((f) => (
+                                <tr key={f.factor} className="text-xs">
+                                  <td className="text-text-secondary py-0.5 pr-2 whitespace-nowrap">{f.factor}</td>
+                                  <td className="font-medium text-text-primary py-0.5 pr-2 whitespace-nowrap text-right">{f.value}</td>
+                                  <td className="py-0.5 pr-1 w-[80px]">
+                                    <div className="bg-border rounded-full h-1.5 w-full">
+                                      <div
+                                        className={`h-1.5 rounded-full ${f.rawScore >= 70 ? "bg-risk-danger" : f.rawScore >= 40 ? "bg-risk-warning" : "bg-risk-safe"}`}
+                                        style={{ width: `${f.rawScore}%` }}
+                                      />
+                                    </div>
+                                  </td>
+                                  <td className={`py-0.5 pr-2 font-bold text-right whitespace-nowrap ${f.rawScore >= 70 ? "text-risk-danger" : f.rawScore >= 40 ? "text-risk-warning" : "text-risk-safe"}`}>
                                     {f.rawScore}
-                                  </span>
-                                </div>
-                                <span className="text-text-secondary/60 w-[48px] shrink-0 text-right">
-                                  +{f.contribution}점
-                                </span>
-                              </div>
-                            ))}
-                          </div>
+                                  </td>
+                                  <td className="text-text-secondary/60 py-0.5 text-right whitespace-nowrap">
+                                    +{f.contribution}점
+                                  </td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
                         ) : (
                           <span className="text-text-secondary/50 text-xs">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-3 text-xs text-text-secondary">
-                        {narratives[school.schoolCode] ? (
-                          <p className="leading-relaxed line-clamp-3">{narratives[school.schoolCode]}</p>
-                        ) : (
-                          <span className="text-text-secondary/50">—</span>
-                        )}
-                      </td>
+                      {hasNarrative && (
+                        <td className="px-4 py-3 text-xs text-text-secondary">
+                          {narratives[school.schoolCode] ? (
+                            <p className="leading-relaxed line-clamp-3">{narratives[school.schoolCode]}</p>
+                          ) : (
+                            <span className="text-text-secondary/50">—</span>
+                          )}
+                        </td>
+                      )}
                     </tr>
                   ))}
                 </tbody>
               </table>
+                );
+              })()}
             </div>
 
             {/* 페이지네이션 */}

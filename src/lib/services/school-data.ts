@@ -80,8 +80,8 @@ export async function getSchoolList(filters: {
       }));
       return { data, total, source: "db" };
     }
-  } catch {
-    // DB 미연결
+  } catch (e) {
+    console.error("[getSchoolList] DB 에러:", e instanceof Error ? e.message : e);
   }
 
   // 2. Try NEIS API (검색어가 있을 때만 — 전체 목록 조회는 비효율)

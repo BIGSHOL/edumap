@@ -77,12 +77,14 @@ export default function GapMapPage() {
   function handleSelectSchool(result: GapAnalysisResult) {
     setSelectedSchool(result);
     setAiSuggestion("");
+    setAiLoading(false);
     setGapStreamUrl(null);
+  }
 
-    if (result.totalGaps > 0) {
-      setAiLoading(true);
-      setGapStreamUrl(`/api/gapmap/stream?schoolCode=${result.schoolCode}`);
-    }
+  function handleRequestAiSuggestion() {
+    if (!selectedSchool || selectedSchool.totalGaps === 0) return;
+    setAiLoading(true);
+    setGapStreamUrl(`/api/gapmap/stream?schoolCode=${selectedSchool.schoolCode}`);
   }
 
   function handleGapStreamComplete(result: unknown) {
@@ -305,6 +307,7 @@ export default function GapMapPage() {
                     streamUrl={gapStreamUrl ?? undefined}
                     onStreamComplete={handleGapStreamComplete}
                     onStreamError={handleGapStreamError}
+                    onRequestAi={handleRequestAiSuggestion}
                   />
                 </div>
               ) : (
@@ -331,13 +334,14 @@ export default function GapMapPage() {
 }
 
 /** 선택된 학교의 상세 공백 분석 뷰 */
-function GapDetail({ result, aiSuggestion, aiLoading, streamUrl, onStreamComplete, onStreamError }: {
+function GapDetail({ result, aiSuggestion, aiLoading, streamUrl, onStreamComplete, onStreamError, onRequestAi }: {
   result: GapAnalysisResult;
   aiSuggestion: string;
   aiLoading: boolean;
   streamUrl?: string;
   onStreamComplete?: (data: unknown) => void;
   onStreamError?: (msg: string) => void;
+  onRequestAi?: () => void;
 }) {
   const style = SEVERITY_STYLES[result.overallSeverity];
 
@@ -403,6 +407,16 @@ function GapDetail({ result, aiSuggestion, aiLoading, streamUrl, onStreamComplet
       )}
 
       {/* AI 개선 제안 */}
+      {/* AI 개선 제안 — 버튼 클릭 시 */}
+      {!aiLoading && !aiSuggestion && result.totalGaps > 0 && onRequestAi && (
+        <button
+          onClick={onRequestAi}
+          className="px-5 py-2.5 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-light transition-colors"
+        >
+          AI 개선 방안 분석
+        </button>
+      )}
+
       {(aiLoading || aiSuggestion) && (
         <div className="bg-primary/5 border border-primary/20 rounded-lg p-5">
           <div className="flex items-start gap-3">
@@ -416,9 +430,7 @@ function GapDetail({ result, aiSuggestion, aiLoading, streamUrl, onStreamComplet
                   onError={onStreamError}
                 />
               ) : (
-                <div>
-                  <AiMarkdown content={aiSuggestion} />
-                </div>
+                <AiMarkdown content={aiSuggestion} />
               )}
             </div>
           </div>

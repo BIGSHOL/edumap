@@ -89,6 +89,7 @@ export default function Home() {
       const params = new URLSearchParams();
       if (region) params.set("region", region);
       if (district) params.set("district", district);
+      params.set("narrative", "false");
       const res = await fetch(`/api/early-alert?${params}`);
       const body = await res.json();
       if (res.ok && body.data) {
