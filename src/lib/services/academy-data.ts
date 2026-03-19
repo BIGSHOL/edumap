@@ -56,9 +56,12 @@ export async function getAcademyStats(params: {
     }
   }
 
-  // 2단계: NEIS API 호출 + 집계
+  // 2단계: NEIS API 호출 + 집계 (5초 타임아웃 — 대량 데이터이므로)
   try {
-    const rows = await getAcademiesByRegion(regionCode);
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("academy-api-timeout")), 5000)
+    );
+    const rows = await Promise.race([getAcademiesByRegion(regionCode), timeout]);
     if (rows.length > 0) {
       const stats = aggregateByDistrict(rows, regionCode);
       const filtered = district
@@ -71,7 +74,7 @@ export async function getAcademyStats(params: {
       return { data: filtered, source: "api" };
     }
   } catch {
-    // API 실패 시 Mock fallback
+    // API 실패 또는 타임아웃 → Mock fallback
   }
 
   // 3단계: Mock fallback

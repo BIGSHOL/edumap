@@ -21,7 +21,7 @@ import type {
   TeacherPositionRow,
   AfterSchoolRow,
 } from "@/lib/api/schoolinfo";
-import { mockSchools, mockSchoolDetail } from "@/mocks/data/schools";
+import { mockSchools, mockSchoolDetail, mockSchoolDetails } from "@/mocks/data/schools";
 import {
   mapNeisToSchoolItem,
   mapToTeacherStats,
@@ -183,8 +183,9 @@ export async function getSchoolDetail(
   const mockItem = mockSchools.find((s) => s.schoolCode === schoolCode);
   if (!mockItem) return { data: null, source: "mock" };
 
-  if (schoolCode === mockSchoolDetail.schoolCode) {
-    return { data: mockSchoolDetail, source: "mock" };
+  const mockDetail = mockSchoolDetails.find((d) => d.schoolCode === schoolCode);
+  if (mockDetail) {
+    return { data: mockDetail, source: "mock" };
   }
   return {
     data: {
@@ -235,6 +236,12 @@ export async function getSchoolRiskData(filters?: {
       if (filters?.region) where.regionCode = filters.region;
       if (filters?.district) where.district = filters.district;
 
+      // DB 쿼리 + 학원 데이터 병렬 조회
+      const academyPromise = import("./academy-data")
+        .then((m) => m.getAcademyStats({ regionCode: filters?.region ?? "" }))
+        .then(({ data }) => new Map(data.map((a) => [a.district, a.totalAcademies])))
+        .catch(() => new Map<string, number>());
+
       const schools = await prisma.school.findMany({
         where,
         select: {
@@ -266,15 +273,7 @@ export async function getSchoolRiskData(filters?: {
       });
 
       if (schools.length > 0) {
-        // 학원 데이터 조인
-        let academyMap: Map<string, number> = new Map();
-        try {
-          const { getAcademyStats } = await import("./academy-data");
-          const { data: academyData } = await getAcademyStats({ regionCode: filters?.region ?? "" });
-          academyMap = new Map(academyData.map((a) => [a.district, a.totalAcademies]));
-        } catch {
-          // 학원 데이터 조회 실패 시 무시
-        }
+        const academyMap = await academyPromise;
 
         return {
           data: schools.map((s) => {
@@ -386,8 +385,13 @@ export async function getSchoolDetails(filters?: {
     }
   }
 
-  // 3. Mock fallback
-  return { data: [mockSchoolDetail], source: "mock" };
+  // 3. Mock fallback — 지역 필터 적용
+  const filtered = mockSchoolDetails.filter((d) => {
+    if (filters?.region && d.regionCode !== filters.region) return false;
+    if (filters?.district && d.district !== filters.district) return false;
+    return true;
+  });
+  return { data: filtered.length > 0 ? filtered : mockSchoolDetails, source: "mock" };
 }
 
 // ─── 내부: 공공 API → SchoolDetail ───

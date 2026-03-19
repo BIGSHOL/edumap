@@ -69,20 +69,38 @@ export function toSchulKndCode(schoolType: string): string {
   return map[schoolType] ?? "02";
 }
 
-/**
- * 학구도 API 시도교육청코드 (cddcCode)
- *
- * 학구도 API의 cddcCode는 NEIS ATPT코드와 동일한 형식을 사용
- * (예: B10 = 서울특별시교육청)
- *
- * 주요 5개 시도 (대회 데모 범위):
- *   B10(서울), C10(부산), D10(대구), E10(인천), J10(경기)
- */
+/** 주요 5개 시도 (대회 데모 범위) */
 export const DEMO_REGIONS = ["B10", "C10", "D10", "E10", "J10"] as const;
 
-/** NEIS ATPT코드를 학구도 API cddcCode로 변환 (동일 체계) */
+/**
+ * 학구도 API cddcCode (7자리)
+ *
+ * 학구도 API는 NEIS ATPT코드가 아닌 별도 7자리 코드 사용
+ * 출처: 전국학교학구도연계정보 API 샘플데이터
+ */
+const ATPT_TO_CDDC: Record<string, string> = {
+  B10: "7010000", // 서울특별시교육청
+  C10: "7150000", // 부산광역시교육청
+  D10: "7160000", // 대구광역시교육청
+  E10: "7170000", // 인천광역시교육청
+  F10: "7180000", // 광주광역시교육청
+  G10: "7190000", // 대전광역시교육청
+  H10: "7200000", // 울산광역시교육청
+  I10: "7430000", // 세종특별자치시교육청
+  J10: "7210000", // 경기도교육청
+  K10: "7220000", // 강원특별자치도교육청
+  M10: "7240000", // 충청북도교육청
+  N10: "7250000", // 충청남도교육청
+  P10: "7260000", // 전북특별자치도교육청
+  Q10: "7280000", // 전라남도교육청
+  R10: "7290000", // 경상북도교육청
+  S10: "7310000", // 경상남도교육청
+  T10: "7330000", // 제주특별자치도교육청
+};
+
+/** NEIS ATPT코드 → 학구도 API cddcCode 변환 */
 export function atptToCddcCode(atptCode: string): string {
-  return atptCode;
+  return ATPT_TO_CDDC[atptCode] ?? atptCode;
 }
 
 /** 학구도 enfsType → schoolType 변환 */

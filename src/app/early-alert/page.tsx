@@ -203,31 +203,47 @@ export default function EarlyAlertPage() {
         <section className="grid grid-cols-4 gap-6 mb-8">
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">전체 학교</p>
-            <p className="text-3xl font-bold mt-1">
-              {loading ? "—" : data?.total ?? 0}
-              <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
-            </p>
+            {loading ? (
+              <div className="animate-pulse h-9 w-20 bg-border rounded mt-1" />
+            ) : (
+              <p className="text-3xl font-bold mt-1">
+                {data?.total ?? 0}
+                <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
+              </p>
+            )}
           </div>
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">위험</p>
-            <p className="text-3xl font-bold mt-1 text-risk-danger">
-              {loading ? "—" : data?.counts.danger ?? 0}
-              <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
-            </p>
+            {loading ? (
+              <div className="animate-pulse h-9 w-20 bg-border rounded mt-1" />
+            ) : (
+              <p className="text-3xl font-bold mt-1 text-risk-danger">
+                {data?.counts.danger ?? 0}
+                <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
+              </p>
+            )}
           </div>
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">경고</p>
-            <p className="text-3xl font-bold mt-1 text-risk-warning">
-              {loading ? "—" : data?.counts.warning ?? 0}
-              <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
-            </p>
+            {loading ? (
+              <div className="animate-pulse h-9 w-20 bg-border rounded mt-1" />
+            ) : (
+              <p className="text-3xl font-bold mt-1 text-risk-warning">
+                {data?.counts.warning ?? 0}
+                <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
+              </p>
+            )}
           </div>
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">안전 / 주의</p>
-            <p className="text-3xl font-bold mt-1 text-risk-safe">
-              {loading ? "—" : (data?.counts.safe ?? 0) + (data?.counts.caution ?? 0)}
-              <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
-            </p>
+            {loading ? (
+              <div className="animate-pulse h-9 w-20 bg-border rounded mt-1" />
+            ) : (
+              <p className="text-3xl font-bold mt-1 text-risk-safe">
+                {(data?.counts.safe ?? 0) + (data?.counts.caution ?? 0)}
+                <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
+              </p>
+            )}
           </div>
         </section>
 

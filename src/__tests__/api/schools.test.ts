@@ -51,13 +51,13 @@ describe("/api/schools", () => {
 describe("/api/schools/[schoolCode]", () => {
   it("학교 상세 정보를 반환한다", async () => {
     const { GET } = await import("@/app/api/schools/[schoolCode]/route");
-    const request = new Request("http://localhost:3000/api/schools/B100000465");
-    const response = await GET(request, { params: Promise.resolve({ schoolCode: "B100000465" }) });
+    const request = new Request("http://localhost:3000/api/schools/7130106");
+    const response = await GET(request, { params: Promise.resolve({ schoolCode: "7130106" }) });
     const body = await response.json();
 
     expect(response.status).toBe(200);
     expect(body.data).toBeDefined();
-    expect(body.data.schoolCode).toBe("B100000465");
+    expect(body.data.schoolCode).toBe("7130106");
     expect(body.data.teacherStats).toBeDefined();
     expect(body.data.financeStats).toBeDefined();
     expect(body.data.afterschoolPrograms).toBeDefined();

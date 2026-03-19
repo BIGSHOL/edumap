@@ -224,32 +224,38 @@ export default function Home() {
             <p className="text-text-secondary text-sm">
               {locationName} 초등학교
             </p>
-            <p className="text-3xl font-bold mt-1">
-              {loading ? "—" : riskSummary.total}
-              <span className="text-sm font-normal text-text-secondary ml-1">
-                개교
-              </span>
-            </p>
+            {loading ? (
+              <div className="animate-pulse h-9 w-24 bg-border rounded mt-1" />
+            ) : (
+              <p className="text-3xl font-bold mt-1">
+                {riskSummary.total}
+                <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
+              </p>
+            )}
           </div>
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">주의 이상 학교</p>
-            <p className="text-3xl font-bold mt-1 text-risk-danger">
-              {loading ? "—" : dangerCount}
-              <span className="text-sm font-normal text-text-secondary ml-1">
-                개교
-              </span>
-            </p>
+            {loading ? (
+              <div className="animate-pulse h-9 w-24 bg-border rounded mt-1" />
+            ) : (
+              <p className="text-3xl font-bold mt-1 text-risk-danger">
+                {dangerCount}
+                <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
+              </p>
+            )}
           </div>
           <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
             <p className="text-text-secondary text-sm">
               {locationName} 평균 위험도
             </p>
-            <p className="text-3xl font-bold mt-1">
-              {loading ? "—" : riskSummary.avgScore}
-              <span className="text-sm font-normal text-text-secondary ml-1">
-                점
-              </span>
-            </p>
+            {loading ? (
+              <div className="animate-pulse h-9 w-16 bg-border rounded mt-1" />
+            ) : (
+              <p className="text-3xl font-bold mt-1">
+                {riskSummary.avgScore}
+                <span className="text-sm font-normal text-text-secondary ml-1">점</span>
+              </p>
+            )}
           </div>
         </section>
 
@@ -275,12 +281,18 @@ export default function Home() {
               <p className="text-xs text-text-secondary mt-0.5">원 크기 = 학교 수, 색상 = 평균 위험도</p>
             </div>
             <div style={{ height: 320 }}>
-              <RegionRiskMapDynamic
-                data={regionMapData}
-                selectedRegion={selectedRegion}
-                selectedDistrict={selectedDistrict}
-                onRegionClick={(code) => setSelectedRegion(code)}
-              />
+              {loading ? (
+                <div className="flex items-center justify-center h-full">
+                  <div className="animate-spin h-8 w-8 border-3 border-primary border-t-transparent rounded-full" />
+                </div>
+              ) : (
+                <RegionRiskMapDynamic
+                  data={regionMapData}
+                  selectedRegion={selectedRegion}
+                  selectedDistrict={selectedDistrict}
+                  onRegionClick={(code) => setSelectedRegion(code)}
+                />
+              )}
             </div>
           </div>
           {/* 선택 지역 위험도 수준별 분포 */}
@@ -288,7 +300,13 @@ export default function Home() {
             <h3 className="text-sm font-semibold text-text-primary mb-4">
               {locationName} 분포
             </h3>
-            <RiskDistribution counts={riskSummary.counts} total={riskSummary.total} />
+            {loading ? (
+              <div className="flex items-center justify-center h-[280px]">
+                <div className="animate-spin h-8 w-8 border-3 border-primary border-t-transparent rounded-full" />
+              </div>
+            ) : (
+              <RiskDistribution counts={riskSummary.counts} total={riskSummary.total} />
+            )}
           </div>
           {/* 위험 학교 목록 */}
           <div className="col-span-4 bg-surface border border-border rounded-lg p-5 shadow-sm max-h-[380px] overflow-auto">

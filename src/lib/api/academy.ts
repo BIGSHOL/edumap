@@ -106,7 +106,7 @@ async function fetchAcademyPage(
 export async function fetchAllAcademyPages(
   params: Record<string, string>,
   pSize: number = 1000,
-  delayMs: number = 300
+  delayMs: number = 100
 ): Promise<AcademyRow[]> {
   const allRows: AcademyRow[] = [];
   let pIndex = 1;

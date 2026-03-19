@@ -37,19 +37,43 @@ export interface EduSupportOffice {
 
 const MOCK_ZONES: ZoneMapping[] = [
   {
-    zoneId: "ZONE-B10-001",
-    schoolNames: ["서울대학교사범대학부설초등학교", "경복중학교"],
-    schoolIds: ["B100000465", "B100000466"],
+    zoneId: "ZONE-B10-GD01",
+    schoolNames: ["서울강동초등학교", "서울강명초등학교", "강동중학교"],
+    schoolIds: ["7130106", "7130107", "7130167"],
     eduSupportCode: "B11",
-    eduSupportName: "서울특별시동부교육지원청",
+    eduSupportName: "서울특별시강동송파교육지원청",
     schoolLevel: "초등학교",
   },
   {
-    zoneId: "ZONE-C10-001",
-    schoolNames: ["부산진초등학교"],
-    schoolIds: ["C100000123"],
+    zoneId: "ZONE-B10-GD02",
+    schoolNames: ["서울강일초등학교", "서울강빛초등학교", "강일중학교"],
+    schoolIds: ["7130108", "7130266", "7130169"],
+    eduSupportCode: "B11",
+    eduSupportName: "서울특별시강동송파교육지원청",
+    schoolLevel: "초등학교",
+  },
+  {
+    zoneId: "ZONE-B10-SP01",
+    schoolNames: ["서울가동초등학교", "서울가락초등학교", "가락중학교"],
+    schoolIds: ["7130101", "7130102", "7130165"],
+    eduSupportCode: "B11",
+    eduSupportName: "서울특별시강동송파교육지원청",
+    schoolLevel: "초등학교",
+  },
+  {
+    zoneId: "ZONE-B10-GN01",
+    schoolNames: ["서울개원초등학교", "서울개포초등학교", "개원중학교", "개포중학교"],
+    schoolIds: ["7091369", "7091371", "7091420", "7091421"],
+    eduSupportCode: "B12",
+    eduSupportName: "서울특별시강남서초교육지원청",
+    schoolLevel: "초등학교",
+  },
+  {
+    zoneId: "ZONE-C10-BJ01",
+    schoolNames: ["부산진초등학교", "개금중학교"],
+    schoolIds: ["C100000123", "C100000124"],
     eduSupportCode: "C11",
-    eduSupportName: "부산광역시동래교육지원청",
+    eduSupportName: "부산광역시부산진구교육지원청",
     schoolLevel: "초등학교",
   },
 ];
@@ -318,8 +342,9 @@ export async function getEduSupportOffices(
 
   // 3. Mock
   const mockOffices: EduSupportOffice[] = [
-    { code: "B11", name: "서울특별시동부교육지원청", zoneCount: 1 },
-    { code: "C11", name: "부산광역시동래교육지원청", zoneCount: 1 },
+    { code: "B11", name: "서울특별시강동송파교육지원청", zoneCount: 3 },
+    { code: "B12", name: "서울특별시강남서초교육지원청", zoneCount: 1 },
+    { code: "C11", name: "부산광역시부산진구교육지원청", zoneCount: 1 },
   ];
   const filtered = regionCode
     ? mockOffices.filter((o) => o.code.startsWith(regionCode.charAt(0)))

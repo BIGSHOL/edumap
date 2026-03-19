@@ -283,28 +283,38 @@ export default function GapMapPage() {
           <section className="grid grid-cols-3 gap-6 mb-8">
             <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
               <p className="text-text-secondary text-sm">분석 대상</p>
-              <p className="text-3xl font-bold mt-1">
-                {loading ? "—" : results.length}
-                <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
-              </p>
+              {loading ? (
+                <div className="animate-pulse h-9 w-20 bg-border rounded mt-1" />
+              ) : (
+                <p className="text-3xl font-bold mt-1">
+                  {results.length}
+                  <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
+                </p>
+              )}
             </div>
             <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
               <p className="text-text-secondary text-sm">공백 심각 학교</p>
-              <p className="text-3xl font-bold mt-1 text-risk-danger">
-                {loading ? "—" : results.filter((r) => r.overallSeverity === "high").length}
-                <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
-              </p>
+              {loading ? (
+                <div className="animate-pulse h-9 w-20 bg-border rounded mt-1" />
+              ) : (
+                <p className="text-3xl font-bold mt-1 text-risk-danger">
+                  {results.filter((r) => r.overallSeverity === "high").length}
+                  <span className="text-sm font-normal text-text-secondary ml-1">개교</span>
+                </p>
+              )}
             </div>
             <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
               <p className="text-text-secondary text-sm">평균 커버리지</p>
-              <p className="text-3xl font-bold mt-1">
-                {loading
-                  ? "—"
-                  : results.length > 0
+              {loading ? (
+                <div className="animate-pulse h-9 w-16 bg-border rounded mt-1" />
+              ) : (
+                <p className="text-3xl font-bold mt-1">
+                  {results.length > 0
                     ? Math.round(results.reduce((s, r) => s + r.coverageRate, 0) / results.length)
                     : 0}
-                <span className="text-sm font-normal text-text-secondary ml-1">%</span>
-              </p>
+                  <span className="text-sm font-normal text-text-secondary ml-1">%</span>
+                </p>
+              )}
             </div>
           </section>
         ) : (
