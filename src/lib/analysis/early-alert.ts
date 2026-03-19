@@ -4,19 +4,22 @@ import type { SchoolDetail } from "@/lib/api/contracts/schools";
 /**
  * 위험도 스코어링 (0~100)
  *
- * 입력: 교원 여건 + 재정 수준 + 방과후 프로그램 수
+ * 입력: 교원 여건 + 재정 수준 + 방과후 프로그램 수 + 주변 학원 밀도
  * 출력: 위험도 스코어 + 주요 기여 요인 랭킹
  */
-export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
+export function calculateRiskScore(
+  school: SchoolDetail,
+  nearbyAcademyCount?: number | null
+): RiskScoreInfo {
   const factors: ContributingFactor[] = [];
   let totalScore = 0;
   let totalWeight = 0;
 
-  // 요인 1: 교원 1인당 학생 수 (가중치 25%)
+  // 요인 1: 교원 1인당 학생 수 (가중치 22%)
   if (school.teacherStats?.studentsPerTeacher != null) {
     const spt = school.teacherStats.studentsPerTeacher;
     const score = Math.min(100, Math.max(0, ((spt - 10) / 15) * 100));
-    const weight = 0.25;
+    const weight = 0.22;
     factors.push({
       factor: "교원 1인당 학생 수",
       weight,
@@ -27,11 +30,11 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
     totalWeight += weight;
   }
 
-  // 요인 2: 기간제 교원 비율 (가중치 20%)
+  // 요인 2: 기간제 교원 비율 (가중치 18%)
   if (school.teacherStats?.tempTeacherRatio != null) {
     const ratio = school.teacherStats.tempTeacherRatio;
     const score = Math.min(100, Math.max(0, (ratio / 0.3) * 100));
-    const weight = 0.2;
+    const weight = 0.18;
     factors.push({
       factor: "기간제 교원 비율",
       weight,
@@ -42,11 +45,11 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
     totalWeight += weight;
   }
 
-  // 요인 3: 학생 1인당 교육비 (가중치 15%, 역수)
+  // 요인 3: 학생 1인당 교육비 (가중치 13%, 역수)
   if (school.financeStats?.budgetPerStudent != null) {
     const bps = school.financeStats.budgetPerStudent;
     const score = Math.min(100, Math.max(0, ((5000000 - bps) / 3000000) * 100));
-    const weight = 0.15;
+    const weight = 0.13;
     factors.push({
       factor: "학생 1인당 교육비",
       weight,
@@ -57,11 +60,11 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
     totalWeight += weight;
   }
 
-  // 요인 4: 방과후 프로그램 수 (가중치 15%, 역수)
+  // 요인 4: 방과후 프로그램 수 (가중치 13%, 역수)
   const programCount = school.afterschoolPrograms.length;
   {
     const score = Math.min(100, Math.max(0, ((5 - programCount) / 5) * 100));
-    const weight = 0.15;
+    const weight = 0.13;
     factors.push({
       factor: "방과후 프로그램 수",
       weight,
@@ -72,7 +75,7 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
     totalWeight += weight;
   }
 
-  // 요인 5: 교원 성별 편중 (가중치 10%)
+  // 요인 5: 교원 성별 편중 (가중치 9%)
   if (school.teacherStats?.femaleTeachers != null && school.teacherStats?.maleTeachers != null) {
     const female = school.teacherStats.femaleTeachers;
     const male = school.teacherStats.maleTeachers;
@@ -81,7 +84,7 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
       const dominantRatio = Math.max(female, male) / total;
       // 90% 이상 한 성별이면 위험, 70% 이하면 양호
       const score = Math.min(100, Math.max(0, ((dominantRatio - 0.5) / 0.4) * 100));
-      const weight = 0.1;
+      const weight = 0.09;
       factors.push({
         factor: "교원 성별 편중",
         weight,
@@ -93,7 +96,7 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
     }
   }
 
-  // 요인 6: 학급 과밀도 (가중치 10%)
+  // 요인 6: 학급 과밀도 (가중치 9%)
   if (school.teacherStats?.currentClasses != null && school.teacherStats?.totalStudents != null) {
     const classes = school.teacherStats.currentClasses;
     const students = school.teacherStats.totalStudents;
@@ -101,7 +104,7 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
       const studentsPerClass = students / classes;
       // 35명 이상이면 위험, 20명 이하면 양호
       const score = Math.min(100, Math.max(0, ((studentsPerClass - 20) / 15) * 100));
-      const weight = 0.1;
+      const weight = 0.09;
       factors.push({
         factor: "학급 과밀도",
         weight,
@@ -113,7 +116,7 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
     }
   }
 
-  // 요인 7: 강사 의존도 (가중치 5%)
+  // 요인 7: 강사 의존도 (가중치 4%)
   if (school.teacherStats?.lecturerCount != null && school.teacherStats?.totalTeachers != null) {
     const lecturers = school.teacherStats.lecturerCount;
     const totalT = school.teacherStats.totalTeachers;
@@ -121,7 +124,7 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
       const lecturerRatio = lecturers / totalT;
       // 20% 이상이면 위험, 5% 이하면 양호
       const score = Math.min(100, Math.max(0, (lecturerRatio / 0.2) * 100));
-      const weight = 0.05;
+      const weight = 0.04;
       factors.push({
         factor: "강사 의존도",
         weight,
@@ -131,6 +134,22 @@ export function calculateRiskScore(school: SchoolDetail): RiskScoreInfo {
       totalScore += score * weight;
       totalWeight += weight;
     }
+  }
+
+  // 요인 8: 주변 학원 밀도 (가중치 12%, 역수 — 학원 적으면 위험)
+  if (nearbyAcademyCount != null) {
+    const count = nearbyAcademyCount;
+    // 200개 이상이면 안전(0점), 20개 이하면 위험(100점)
+    const score = Math.min(100, Math.max(0, ((200 - count) / 180) * 100));
+    const weight = 0.12;
+    factors.push({
+      factor: "주변 학원 밀도",
+      weight,
+      value: count,
+      description: `${count}개 (${count < 50 ? "부족" : "적정"})`,
+    });
+    totalScore += score * weight;
+    totalWeight += weight;
   }
 
   // 가중치 합으로 정규화
@@ -174,79 +193,90 @@ export function calculateRiskScoreFromRaw(school: {
   currentClasses?: number | null;
   authorizedClasses?: number | null;
   totalStudents?: number | null;
+  nearbyAcademyCount?: number | null;
 }): { schoolCode: string; score: number; level: RiskLevel; factors: FactorBreakdown[] } {
   let totalScore = 0;
   let totalWeight = 0;
   const factors: FactorBreakdown[] = [];
 
-  // 요인 1: 교원1인당 학생수 (25%)
+  // 요인 1: 교원1인당 학생수 (22%)
   if (school.studentsPerTeacher != null) {
     const spt = school.studentsPerTeacher;
     const rawScore = Math.min(100, Math.max(0, ((spt - 10) / 15) * 100));
-    const weight = 0.25;
+    const weight = 0.22;
     factors.push({ factor: "교원1인당 학생수", value: `${spt.toFixed(1)}명`, rawScore: Math.round(rawScore), weight, contribution: 0 });
     totalScore += rawScore * weight;
     totalWeight += weight;
   }
 
-  // 요인 2: 기간제교원 비율 (20%)
+  // 요인 2: 기간제교원 비율 (18%)
   if (school.tempTeacherRatio != null) {
     const ratio = school.tempTeacherRatio;
     const rawScore = Math.min(100, Math.max(0, (ratio / 0.3) * 100));
-    const weight = 0.2;
+    const weight = 0.18;
     factors.push({ factor: "기간제교원 비율", value: `${(ratio * 100).toFixed(1)}%`, rawScore: Math.round(rawScore), weight, contribution: 0 });
     totalScore += rawScore * weight;
     totalWeight += weight;
   }
 
-  // 요인 3: 학생1인당 교육비 (15%)
+  // 요인 3: 학생1인당 교육비 (13%)
   if (school.budgetPerStudent != null) {
     const bps = school.budgetPerStudent;
     const rawScore = Math.min(100, Math.max(0, ((5000000 - bps) / 3000000) * 100));
-    const weight = 0.15;
+    const weight = 0.13;
     factors.push({ factor: "학생1인당 교육비", value: `${Math.round(bps).toLocaleString()}원`, rawScore: Math.round(rawScore), weight, contribution: 0 });
     totalScore += rawScore * weight;
     totalWeight += weight;
   }
 
-  // 요인 4: 방과후 프로그램 (15%)
+  // 요인 4: 방과후 프로그램 (13%)
   {
     const rawScore = Math.min(100, Math.max(0, ((5 - school.programCount) / 5) * 100));
-    const weight = 0.15;
+    const weight = 0.13;
     factors.push({ factor: "방과후 프로그램", value: `${school.programCount}개`, rawScore: Math.round(rawScore), weight, contribution: 0 });
     totalScore += rawScore * weight;
     totalWeight += weight;
   }
 
-  // 요인 5: 교원 성별 편중 (10%)
+  // 요인 5: 교원 성별 편중 (9%)
   if (school.femaleTeachers != null && school.maleTeachers != null) {
     const total = school.femaleTeachers + school.maleTeachers;
     if (total > 0) {
       const dominantRatio = Math.max(school.femaleTeachers, school.maleTeachers) / total;
       const rawScore = Math.min(100, Math.max(0, ((dominantRatio - 0.5) / 0.4) * 100));
-      const weight = 0.1;
+      const weight = 0.09;
       factors.push({ factor: "교원 성별 편중", value: `여${school.femaleTeachers}/남${school.maleTeachers}`, rawScore: Math.round(rawScore), weight, contribution: 0 });
       totalScore += rawScore * weight;
       totalWeight += weight;
     }
   }
 
-  // 요인 6: 학급 과밀도 (10%)
+  // 요인 6: 학급 과밀도 (9%)
   if (school.currentClasses != null && school.totalStudents != null && school.currentClasses > 0) {
     const studentsPerClass = school.totalStudents / school.currentClasses;
     const rawScore = Math.min(100, Math.max(0, ((studentsPerClass - 20) / 15) * 100));
-    const weight = 0.1;
+    const weight = 0.09;
     factors.push({ factor: "학급 과밀도", value: `${studentsPerClass.toFixed(1)}명/반`, rawScore: Math.round(rawScore), weight, contribution: 0 });
     totalScore += rawScore * weight;
     totalWeight += weight;
   }
 
-  // 요인 7: 강사 의존도 (5%)
+  // 요인 7: 강사 의존도 (4%)
   if (school.lecturerCount != null && school.totalTeachers != null && school.totalTeachers > 0) {
     const lecturerRatio = school.lecturerCount / school.totalTeachers;
     const rawScore = Math.min(100, Math.max(0, (lecturerRatio / 0.2) * 100));
-    const weight = 0.05;
+    const weight = 0.04;
     factors.push({ factor: "강사 의존도", value: `${school.lecturerCount}명`, rawScore: Math.round(rawScore), weight, contribution: 0 });
+    totalScore += rawScore * weight;
+    totalWeight += weight;
+  }
+
+  // 요인 8: 주변 학원 밀도 (12%, 역수 — 학원 적으면 위험)
+  if (school.nearbyAcademyCount != null) {
+    const count = school.nearbyAcademyCount;
+    const rawScore = Math.min(100, Math.max(0, ((200 - count) / 180) * 100));
+    const weight = 0.12;
+    factors.push({ factor: "주변 학원 밀도", value: `${count}개`, rawScore: Math.round(rawScore), weight, contribution: 0 });
     totalScore += rawScore * weight;
     totalWeight += weight;
   }

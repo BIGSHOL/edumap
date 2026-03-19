@@ -1,4 +1,5 @@
 import type { SchoolDetail } from "@/lib/api/contracts/schools";
+import type { AcademyStatsData } from "@/lib/services/academy-data";
 
 /**
  * GapMap — 학습자원 공백 분석
@@ -23,7 +24,7 @@ export const EXPECTED_CATEGORIES = [
 export type GapCategory = (typeof EXPECTED_CATEGORIES)[number]["id"];
 
 /** 공백 유형 */
-export type GapType = "missing_category" | "low_enrollment" | "understaffed" | "underfunded";
+export type GapType = "missing_category" | "low_enrollment" | "understaffed" | "underfunded" | "education_desert";
 
 /** 개별 공백 항목 */
 export interface GapItem {
@@ -42,6 +43,11 @@ export interface GapAnalysisResult {
   gaps: GapItem[];
   coverageRate: number; // 0~100, 카테고리 커버리지
   overallSeverity: "low" | "medium" | "high";
+  academySummary?: {
+    totalAcademies: number;
+    academyByCategory: Record<string, number>; // GapCategory별 학원 수
+    hasComplement: boolean; // 학원 보완 가능 여부
+  };
 }
 
 /** 프로그램 subject에서 카테고리 추론 */
@@ -61,9 +67,31 @@ export function inferCategory(subject: string, category: string | null): GapCate
 }
 
 /**
- * 학교의 학습자원 공백을 분석합니다.
+ * 교습영역별 학원 수를 GapCategory별 학원 수로 변환
  */
-export function analyzeGaps(school: SchoolDetail): GapAnalysisResult {
+function getRealmCountForCategory(
+  academyByRealm: Record<string, number>,
+  category: GapCategory
+): number {
+  const realmMap: Record<GapCategory, string[]> = {
+    academic: ["입시.검정 및 보습", "인문사회"],
+    arts: ["예능(음악)", "예능(미술)", "예능(기타)"],
+    sports: ["체육"],
+    technology: ["직업기술"],
+    language: ["국제화"],
+  };
+  const realms = realmMap[category] ?? [];
+  return realms.reduce((sum, r) => sum + (academyByRealm[r] ?? 0), 0);
+}
+
+/**
+ * 학교의 학습자원 공백을 분석합니다.
+ * @param academyStats 주변 학원 통계 (선택, 있으면 보완 가능 여부 판단)
+ */
+export function analyzeGaps(
+  school: SchoolDetail,
+  academyStats?: AcademyStatsData
+): GapAnalysisResult {
   const gaps: GapItem[] = [];
 
   // 1. 방과후 프로그램 카테고리 커버리지 분석
@@ -78,12 +106,32 @@ export function analyzeGaps(school: SchoolDetail): GapAnalysisResult {
   );
 
   for (const missing of missingCategories) {
+    let severity: "low" | "medium" | "high" = missing.id === "academic" ? "high" : "medium";
+    let description = `${missing.label} 분야 방과후 프로그램이 없습니다.`;
+    let recommendation = `${missing.label} 분야 방과후 프로그램 개설을 권장합니다. 인근 학교 또는 EBS 온라인 강좌를 활용할 수 있습니다.`;
+
+    // 학원 보완 가능 여부 판단
+    if (academyStats) {
+      const realmCount = getRealmCountForCategory(academyStats.academyByRealm, missing.id);
+      if (realmCount >= 30) {
+        severity = "low";
+        recommendation += ` 해당 지역에 ${missing.label} 분야 학원이 ${realmCount}개 운영 중이므로 학원을 통한 보완이 가능합니다.`;
+      } else if (realmCount >= 10) {
+        if (severity === "high") severity = "medium";
+        recommendation += ` 인근 ${missing.label} 학원(${realmCount}개)을 통한 부분 보완이 가능합니다.`;
+      } else if (realmCount === 0) {
+        severity = "high";
+        description += " (학원 접근성도 없는 교육 사각지대)";
+      }
+    }
+
     gaps.push({
-      type: "missing_category",
+      type: academyStats && getRealmCountForCategory(academyStats.academyByRealm, missing.id) === 0
+        ? "education_desert" : "missing_category",
       category: missing.id,
-      severity: missing.id === "academic" ? "high" : "medium",
-      description: `${missing.label} 분야 방과후 프로그램이 없습니다.`,
-      recommendation: `${missing.label} 분야 방과후 프로그램 개설을 권장합니다. 인근 학교 또는 EBS 온라인 강좌를 활용할 수 있습니다.`,
+      severity,
+      description,
+      recommendation,
     });
   }
 
@@ -186,6 +234,20 @@ export function analyzeGaps(school: SchoolDetail): GapAnalysisResult {
     overallSeverity = "medium";
   }
 
+  // 학원 통계 요약
+  let academySummary: GapAnalysisResult["academySummary"];
+  if (academyStats) {
+    const academyByCategory: Record<string, number> = {};
+    for (const cat of EXPECTED_CATEGORIES) {
+      academyByCategory[cat.id] = getRealmCountForCategory(academyStats.academyByRealm, cat.id);
+    }
+    academySummary = {
+      totalAcademies: academyStats.totalAcademies,
+      academyByCategory,
+      hasComplement: Object.values(academyByCategory).some((c) => c >= 10),
+    };
+  }
+
   return {
     schoolCode: school.schoolCode,
     schoolName: school.schoolName,
@@ -193,5 +255,6 @@ export function analyzeGaps(school: SchoolDetail): GapAnalysisResult {
     gaps,
     coverageRate,
     overallSeverity,
+    academySummary,
   };
 }

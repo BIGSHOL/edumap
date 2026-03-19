@@ -68,3 +68,28 @@ export function toSchulKndCode(schoolType: string): string {
   };
   return map[schoolType] ?? "02";
 }
+
+/**
+ * 학구도 API 시도교육청코드 (cddcCode)
+ *
+ * 학구도 API의 cddcCode는 NEIS ATPT코드와 동일한 형식을 사용
+ * (예: B10 = 서울특별시교육청)
+ *
+ * 주요 5개 시도 (대회 데모 범위):
+ *   B10(서울), C10(부산), D10(대구), E10(인천), J10(경기)
+ */
+export const DEMO_REGIONS = ["B10", "C10", "D10", "E10", "J10"] as const;
+
+/** NEIS ATPT코드를 학구도 API cddcCode로 변환 (동일 체계) */
+export function atptToCddcCode(atptCode: string): string {
+  return atptCode;
+}
+
+/** 학구도 enfsType → schoolType 변환 */
+export function enfsTypeToSchoolType(
+  enfsType: string
+): "elementary" | "middle" | "high" {
+  if (enfsType.includes("초등")) return "elementary";
+  if (enfsType.includes("중학")) return "middle";
+  return "high";
+}

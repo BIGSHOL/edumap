@@ -198,6 +198,7 @@ export async function getSchoolDetail(
 export interface RiskRawData {
   schoolCode: string;
   schoolName: string;
+  district?: string;
   studentsPerTeacher: number | null;
   tempTeacherRatio: number | null;
   budgetPerStudent: number | null;
@@ -210,6 +211,8 @@ export interface RiskRawData {
   currentClasses: number | null;
   authorizedClasses: number | null;
   totalStudents: number | null;
+  // 8요인: 주변 학원 밀도
+  nearbyAcademyCount?: number | null;
 }
 
 /**
@@ -232,6 +235,7 @@ export async function getSchoolRiskData(filters?: {
       select: {
         schoolCode: true,
         schoolName: true,
+        district: true,
         teacherStats: {
           where: { year: 2024 },
           select: {
@@ -257,12 +261,23 @@ export async function getSchoolRiskData(filters?: {
     });
 
     if (schools.length > 0) {
+      // 학원 데이터 조인
+      let academyMap: Map<string, number> = new Map();
+      try {
+        const { getAcademyStats } = await import("./academy-data");
+        const { data: academyData } = await getAcademyStats({ regionCode: filters?.region ?? "" });
+        academyMap = new Map(academyData.map((a) => [a.district, a.totalAcademies]));
+      } catch {
+        // 학원 데이터 조회 실패 시 무시
+      }
+
       return {
         data: schools.map((s) => {
           const ts = s.teacherStats[0];
           return {
             schoolCode: s.schoolCode,
             schoolName: s.schoolName,
+            district: s.district,
             studentsPerTeacher: ts?.studentsPerTeacher ?? null,
             tempTeacherRatio: ts?.tempTeacherRatio ?? null,
             budgetPerStudent: s.financeStats[0]?.budgetPerStudent ?? null,
@@ -274,6 +289,7 @@ export async function getSchoolRiskData(filters?: {
             currentClasses: ts?.currentClasses ?? null,
             authorizedClasses: ts?.authorizedClasses ?? null,
             totalStudents: ts?.totalStudents ?? null,
+            nearbyAcademyCount: academyMap.get(s.district) ?? null,
           };
         }),
         source: "db",

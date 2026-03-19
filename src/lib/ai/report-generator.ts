@@ -1,6 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import type { ReportType } from "@/types/report";
 import type { SchoolDetail } from "@/lib/api/contracts/schools";
+import type { AcademyStatsData } from "@/lib/services/academy-data";
 import { buildReportPrompt } from "./prompts";
 
 const MODEL = "claude-sonnet-4-6-20250514";
@@ -10,11 +11,13 @@ const MODEL = "claude-sonnet-4-6-20250514";
  *
  * @param reportType - 리포트 유형 (policy/teacher/parent)
  * @param school - 학교 상세 정보
+ * @param academyStats - 주변 학원 통계 (선택)
  * @returns 생성된 리포트 텍스트
  */
 export async function generateReport(
   reportType: ReportType,
-  school: SchoolDetail
+  school: SchoolDetail,
+  academyStats?: AcademyStatsData
 ): Promise<string> {
   const apiKey = process.env.ANTHROPIC_API_KEY;
 
@@ -25,7 +28,7 @@ export async function generateReport(
 
   try {
     const client = new Anthropic({ apiKey });
-    const prompt = buildReportPrompt(reportType, school);
+    const prompt = buildReportPrompt(reportType, school, academyStats);
 
     const message = await client.messages.create({
       model: MODEL,

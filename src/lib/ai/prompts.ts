@@ -1,5 +1,6 @@
 import type { ReportType } from "@/types/report";
 import type { SchoolDetail } from "@/lib/api/contracts/schools";
+import type { AcademyStatsData } from "@/lib/services/academy-data";
 
 /**
  * 대상별 프롬프트 생성
@@ -11,9 +12,10 @@ import type { SchoolDetail } from "@/lib/api/contracts/schools";
  */
 export function buildReportPrompt(
   reportType: ReportType,
-  school: SchoolDetail
+  school: SchoolDetail,
+  academyStats?: AcademyStatsData
 ): string {
-  const baseContext = buildSchoolContext(school);
+  const baseContext = buildSchoolContext(school, academyStats);
 
   switch (reportType) {
     case "policy":
@@ -25,7 +27,7 @@ export function buildReportPrompt(
   }
 }
 
-function buildSchoolContext(school: SchoolDetail): string {
+function buildSchoolContext(school: SchoolDetail, academyStats?: AcademyStatsData): string {
   const lines: string[] = [
     `학교명: ${school.schoolName}`,
     `학교급: ${school.schoolType === "elementary" ? "초등학교" : school.schoolType === "middle" ? "중학교" : "고등학교"}`,
@@ -56,6 +58,21 @@ function buildSchoolContext(school: SchoolDetail): string {
     school.afterschoolPrograms.forEach((p) => {
       lines.push(`  - ${p.subject} (${p.enrollment ?? "?"}명 수강)`); // 프로그램명, 수강인원수
     });
+  }
+
+  // 주변 학원 현황 (나이스 학원교습소정보)
+  if (academyStats) {
+    lines.push(`[주변 학원 현황 - ${academyStats.year}년, ${academyStats.district}]`);
+    lines.push(`  지역 내 학원 수: ${academyStats.totalAcademies}개`);
+    if (academyStats.totalCapacity) {
+      lines.push(`  총 수용 인원: ${academyStats.totalCapacity.toLocaleString()}명`);
+    }
+    const topRealms = Object.entries(academyStats.academyByRealm)
+      .sort(([, a], [, b]) => b - a)
+      .slice(0, 5);
+    for (const [realm, count] of topRealms) {
+      lines.push(`  - ${realm}: ${count}개`); // 교습영역별 학원수
+    }
   }
 
   return lines.join("\n");

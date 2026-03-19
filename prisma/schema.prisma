@@ -135,6 +135,41 @@ model ReportCache {
   @@map("report_cache")
 }
 
+model AcademyStats {
+  id             String   @id @default(uuid())
+  regionCode     String   @map("region_code") @db.VarChar(10) // ATPT 코드 (B10 등)
+  district       String   @db.VarChar(50) // 행정구역명 (강남구)
+  year           Int
+  totalAcademies Int      @map("total_academies") // 개원 상태 학원 총수
+  totalCapacity  Int?     @map("total_capacity") // 총 정원(수용인원)
+  academyByRealm Json     @map("academy_by_realm") // 교습영역별 학원 수
+  source         String   @default("neis") @db.VarChar(50)
+  collectedAt    DateTime @default(now()) @map("collected_at")
+
+  @@unique([regionCode, district, year], name: "idx_academy_region_district_year")
+  @@index([regionCode], map: "idx_academy_region")
+  @@map("academy_stats")
+}
+
+model DistrictZone {
+  id             String  @id @default(uuid())
+  zoneId         String  @map("zone_id") @db.VarChar(50) // 학구ID
+  schoolId       String  @map("school_id") @db.VarChar(50) // 학교ID
+  schoolName     String  @map("school_name") @db.VarChar(100) // 학교명
+  schoolLevel    String  @map("school_level") @db.VarChar(20) // 학교급구분
+  sidoEduCode    String  @map("sido_edu_code") @db.VarChar(20) // 시도교육청코드
+  sidoEduName    String  @map("sido_edu_name") @db.VarChar(50) // 시도교육청명
+  eduSupportCode String  @map("edu_support_code") @db.VarChar(20) // 교육지원청코드
+  eduSupportName String  @map("edu_support_name") @db.VarChar(50) // 교육지원청명
+  referenceDate  String? @map("reference_date") @db.VarChar(10) // 데이터기준일자
+
+  @@unique([zoneId, schoolId], name: "idx_zone_school")
+  @@index([zoneId], map: "idx_district_zone_id")
+  @@index([schoolId], map: "idx_district_school_id")
+  @@index([sidoEduCode], map: "idx_district_sido")
+  @@map("district_zone")
+}
+
 model ApiCache {
   id           String   @id @default(uuid())
   apiSource    String   @map("api_source") @db.VarChar(50)

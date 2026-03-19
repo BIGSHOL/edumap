@@ -30,13 +30,13 @@
 
 - [x] Next.js 16 + TypeScript + Prisma 6 + Tailwind CSS 프로젝트 셋업
 - [x] Vitest + React Testing Library + MSW + Playwright 테스트 환경
-- [x] Prisma 스키마 (8 모델: Region, School, TeacherStats, FinanceStats, AfterSchoolProgram, RiskScore, ReportCache, ApiCache)
+- [x] Prisma 스키마 (9 모델: Region, School, TeacherStats, FinanceStats, AfterSchoolProgram, RiskScore, ReportCache, ApiCache, AcademyStats)
 - [x] API 계약 정의 (Zod): schools, report, early-alert
 - [x] Mock 데이터 (3개 학교 + 상세 정보 + 리포트 샘플)
 - [x] API Routes: `/api/schools`, `/api/schools/[schoolCode]`, `/api/report`, `/api/early-alert`
 - [x] AI 리포트 생성: Claude API 연동 + fallback 리포트 (API 키 없이도 동작)
 - [x] 대상별 프롬프트 설계 (policy/teacher/parent)
-- [x] EarlyAlert 위험도 스코어링 로직 (가중 다요인: 교원1인당학생수 35%, 기간제교원비율 25%, 학생1인당교육비 20%, 방과후프로그램수 20%)
+- [x] EarlyAlert 위험도 스코어링 로직 (가중 다요인 8개: 교원1인당학생수 22%, 기간제교원비율 18%, 학생1인당교육비 13%, 방과후프로그램수 13%, 교원성별편중 9%, 학급과밀도 9%, 강사의존도 4%, 주변학원밀도 12%)
 - [x] UI 컴포넌트: SearchBar, SchoolCard, RiskScoreBadge, ReportViewer, ReportTypeSelector, ReportLoading
 - [x] 메인 대시보드 (`/`): 검색, 요약 카드, 학교 목록
 - [x] 학교 리포트 페이지 (`/report/[schoolCode]`): 학교 정보 + 데이터 카드 + 방과후 프로그램 테이블 + AI 리포트 생성
@@ -65,6 +65,33 @@
 - [x] Pretendard 폰트 CDN 로드 (상업용 무료 폰트, OFL-1.1)
 - [x] 공공누리 제1유형 라이선스 표기 (모든 페이지 푸터)
 
+### 구현 완료 (Phase 5 — 학원교습소 데이터 통합)
+
+- [x] 나이스 학원교습소정보 API 클라이언트 (`src/lib/api/academy.ts`)
+- [x] AcademyStats Prisma 모델 — 시군구 단위 학원 집계 (교습영역별 JSON)
+- [x] Cache-Through 서비스 레이어 (`src/lib/services/academy-data.ts`)
+- [x] Zod 계약 (`src/lib/api/contracts/academy.ts`) + Mock 데이터
+- [x] API 라우트: `/api/academy/stats`
+- [x] EarlyAlert 8번째 요인 "주변 학원 밀도" 추가 (가중치 12%, 8요인 합 100%)
+- [x] GapMap 학원 보완 여부 판단 — missing_category 심각도 조정, education_desert 탐지
+- [x] AI 프롬프트에 학원 컨텍스트 추가 (Claude 리포트 생성 시 활용)
+- [x] GapMap UI — 주변 학원 현황 섹션 (카테고리별 학원 수 표시)
+- [x] 60개 테스트 전체 통과, 빌드 성공
+
+### 구현 완료 (Phase 6 — 학구도 데이터 통합)
+
+- [x] 학구도 REST API 클라이언트 (`src/lib/api/district-zone.ts`) — 공공데이터포털 학구도연계정보
+- [x] Prisma DistrictZone 모델 — 학구-학교 매핑 (zone_id + school_id)
+- [x] Zod 계약 (`src/lib/api/contracts/district-zone.ts`) — ZoneAnalysisResult, EduSupportOffice
+- [x] 시도교육청코드 매핑 확장 (`region-codes.ts`) — enfsType 변환, DEMO_REGIONS 5개 시도
+- [x] Cache-Through 서비스 레이어 (`src/lib/services/zone-data.ts`) — DB → API → Mock 3단 fallback
+- [x] 학구 분석 모듈 (`src/lib/analysis/zone-analysis.ts`) — 학구 평균 + 학교 간 편차 산출
+- [x] API 라우트: `/api/zone-analysis`, `/api/edu-support-offices`
+- [x] 지도 컴포넌트: ZoneClusterMap + SSR-safe 동적 임포트
+- [x] GapMap 페이지 학구별 분석 모드 추가 (학교별/학구별 토글, 교육지원청 필터)
+- [x] 출처 표기: 전국학교학구도연계정보(data.go.kr) 추가
+- [x] 68개 테스트 전체 통과, 빌드 성공
+
 ### 미완료 / 대회 제출 준비
 
 - [ ] Vercel 배포 + 환경변수 설정
@@ -81,7 +108,7 @@
 
 **핵심 로직** (`src/lib/analysis/early-alert.ts`):
 - 입력: 교원 여건 + 재정 수준 + 방과후 프로그램 수
-- 분석: 가중 다요인 스코어링 (4개 요인)
+- 분석: 가중 다요인 스코어링 (8개 요인: 교원1인당학생수 22%, 기간제교원비율 18%, 학생1인당교육비 13%, 방과후프로그램수 13%, 교원성별편중 9%, 학급과밀도 9%, 강사의존도 4%, 주변학원밀도 12%)
 - 출력: 학교·지역별 위험도 스코어 + 주요 기여 요인 랭킹
 - 수준 분류: safe(0-30) / caution(31-50) / warning(51-70) / danger(71-100)
 
@@ -93,8 +120,10 @@
 
 **핵심 로직** (`src/lib/analysis/gapmap.ts`):
 - 카테고리별 방과후 프로그램 분포 분석
-- 공백 유형 탐지: missing_category, low_enrollment, understaffed, underfunded
+- 공백 유형 탐지: missing_category, low_enrollment, understaffed, underfunded, education_desert
 - 학교별 공백 심각도(overallSeverity) 산출
+- **학구별 분석 모드** (`src/lib/analysis/zone-analysis.ts`): 학구 단위 평균 위험도, 커버리지, 학교 간 편차
+- 학구 클러스터 지도 시각화 (`src/components/map/ZoneClusterMap.tsx`)
 
 ---
 
@@ -133,6 +162,9 @@ src/
 │       ├── report/route.ts           # AI 리포트 생성 API
 │       ├── early-alert/route.ts      # 위험도 분석 API
 │       ├── gapmap/route.ts           # GapMap 분석 API
+│       ├── academy/stats/route.ts   # 학원교습소 통계 API
+│       ├── zone-analysis/route.ts    # 학구별 종합 분석 API
+│       ├── edu-support-offices/route.ts  # 교육지원청 목록 API
 │       └── schools/search/route.ts   # 학교 검색 API
 ├── components/
 │   ├── SearchBar.tsx
@@ -144,7 +176,9 @@ src/
 │   │   └── FinanceChart.tsx        # 재정 현황 차트
 │   ├── map/
 │   │   ├── SchoolMap.tsx           # Leaflet 지도 (학교 마커)
-│   │   └── SchoolMapDynamic.tsx    # SSR-safe 동적 임포트 래퍼
+│   │   ├── SchoolMapDynamic.tsx    # SSR-safe 동적 임포트 래퍼
+│   │   ├── ZoneClusterMap.tsx      # 학구 클러스터 지도 (학구별 마커)
+│   │   └── ZoneClusterMapDynamic.tsx # SSR-safe 동적 임포트 래퍼
 │   └── report/
 │       ├── ReportViewer.tsx
 │       ├── ReportTypeSelector.tsx
@@ -155,13 +189,18 @@ src/
 │   │   └── report-generator.ts # Claude API 연동 + fallback
 │   ├── analysis/
 │   │   ├── early-alert.ts      # 위험도 스코어링 알고리즘
-│   │   └── gapmap.ts           # 학습자원 공백 분석
+│   │   ├── gapmap.ts           # 학습자원 공백 분석
+│   │   └── zone-analysis.ts    # 학구 단위 종합 분석
 │   ├── api/
 │   │   ├── contracts/          # Zod 스키마 (API 계약)
 │   │   ├── schoolinfo.ts       # 학교알리미 API 클라이언트
-│   │   └── neis.ts             # 나이스 API 클라이언트
+│   │   ├── neis.ts             # 나이스 API 클라이언트
+│   │   ├── academy.ts          # 나이스 학원교습소 API 클라이언트
+│   │   └── district-zone.ts    # 학구도연계정보 API 클라이언트
 │   ├── services/
 │   │   ├── school-data.ts      # Cache-Through 서비스 (DB→API→Mock)
+│   │   ├── academy-data.ts     # 학원 통계 서비스 (DB→API→Mock)
+│   │   ├── zone-data.ts        # 학구도 서비스 (DB→API→Mock)
 │   │   ├── mappers.ts          # API 응답 → SchoolDetail 변환
 │   │   ├── region-codes.ts     # 시도교육청 코드 매핑
 │   │   └── utils.ts            # 데이터 소스 라벨 등 유틸
@@ -205,6 +244,8 @@ e2e/
 | 6 | EBS 공공데이터 | 지역별 강좌 수강 현황, 무료 강좌 접근성 | ② GapMap | 파일 다운로드 |
 | 7 | 통계청 소득 데이터 | 시군구별 중위소득, 기초생활수급 학생 비율 | ③ InsightReport | 파일 다운로드 |
 | 8 | 나이스 대국민서비스 | 학교별 기본 현황, 교육과정 편성 정보 | ①②③ 공통 | Open API |
+| 9 | 나이스 학원교습소정보 | 학원명, 교습영역, 정원, 등록상태, 행정구역 | ①② EarlyAlert/GapMap | Open API |
+| 10 | 전국학교학구도연계정보 | 학구ID, 학교ID, 학교명, 학교급, 교육지원청코드 | ② GapMap(학구분석) | Open API |
 
 ### 데이터 연결 방식
 
@@ -233,6 +274,12 @@ EDSS (에듀데이터서비스)
 Claude API (InsightReport)
   키명 : ANTHROPIC_API_KEY
   모델 : claude-opus-4-5 (한국어 품질 최우선)
+
+전국학교학구도연계정보 (공공데이터포털)
+  URL : https://api.data.go.kr/openapi/tn_pubr_public_schul_atndskl_zn_drw_lnkinfo_api
+  키명 : DISTRICT_ZONE_API_KEY
+  일일 트래픽 : 1,000건
+  라이선스 : 저작자표시
 ```
 
 ---
@@ -254,6 +301,7 @@ Claude API (InsightReport)
 SCHOOLINFO_API_KEY=     # 학교알리미 Open API 인증키
 NEIS_API_KEY=           # 나이스 Open API 인증키
 ANTHROPIC_API_KEY=      # Claude API (InsightReport 리포트 생성)
+DISTRICT_ZONE_API_KEY=  # 전국학교학구도연계정보 API (공공데이터포털)
 DATABASE_URL=           # Supabase PostgreSQL 연결 URL
 DIRECT_URL=             # Supabase Direct URL (Prisma 마이그레이션용)
 ```

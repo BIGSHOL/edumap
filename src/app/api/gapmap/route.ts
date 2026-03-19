@@ -4,6 +4,7 @@ import { analyzeGaps } from "@/lib/analysis/gapmap";
 import { sourceLabel } from "@/lib/services/utils";
 import { generateWithClaude } from "@/lib/ai/gemini";
 import { buildGapSuggestionPrompt, buildGapSchoolContext } from "@/lib/ai/prompts-gemini";
+import { getAcademyStats } from "@/lib/services/academy-data";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -12,14 +13,17 @@ export async function GET(request: Request) {
   const district = searchParams.get("district") ?? undefined;
   const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit") ?? 200)));
 
-  const { data: schools, source } = await getSchoolDetails({
-    schoolCode,
-    region: regionCode,
-    district,
-  });
+  // 학교 데이터 + 학원 통계 병렬 조회
+  const [{ data: schools, source }, { data: academyData }] = await Promise.all([
+    getSchoolDetails({ schoolCode, region: regionCode, district }),
+    getAcademyStats({ regionCode: regionCode ?? "B10", district }),
+  ]);
+
+  // 시군구별 학원 통계 맵
+  const academyMap = new Map(academyData.map((a) => [a.district, a]));
 
   const results = schools
-    .map((school) => analyzeGaps(school))
+    .map((school) => analyzeGaps(school, academyMap.get(school.district)))
     .sort((a, b) => b.totalGaps - a.totalGaps)
     .slice(0, limit);
 
