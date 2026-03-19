@@ -5,7 +5,7 @@
  * TTL: 24시간 (공공 API 데이터는 일 단위로 갱신)
  */
 
-import { prisma } from "@/lib/db/prisma";
+import { prisma, isDbConnected } from "@/lib/db/prisma";
 
 const DEFAULT_TTL_HOURS = 24;
 
@@ -17,6 +17,7 @@ export async function getCached<T>(
   apiSource: string,
   requestKey: string
 ): Promise<T | null> {
+  if (!(await isDbConnected())) return null;
   try {
     const cached = await prisma.apiCache.findUnique({
       where: {

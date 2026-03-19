@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, isDbConnected } from "@/lib/db/prisma";
 
 /**
  * GET /api/districts?region=B10
@@ -8,6 +8,10 @@ import { prisma } from "@/lib/db/prisma";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const region = searchParams.get("region");
+
+  if (!(await isDbConnected())) {
+    return NextResponse.json({ data: [] });
+  }
 
   try {
     const where: Record<string, unknown> = {};

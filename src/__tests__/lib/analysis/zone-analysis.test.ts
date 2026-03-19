@@ -46,6 +46,7 @@ describe("analyzeZone", () => {
     expect(result.overallLevel).toBe("caution");
     expect(result.riskScoreVariance).toBe(0);
     expect(result.schools).toEqual([]);
+    expect(result.zoneName).toContain("학구");
   });
 
   it("단일 학교 학구 분석", () => {
@@ -53,6 +54,7 @@ describe("analyzeZone", () => {
     const result = analyzeZone("ZONE-SINGLE", [school]);
 
     expect(result.schoolCount).toBe(1);
+    expect(result.zoneName).toContain("테스트초"); // 학교명 축약 포함
     expect(result.schools).toHaveLength(1);
     expect(result.schools[0].schoolCode).toBe("T000000001");
     expect(result.avgRiskScore).toBeGreaterThanOrEqual(0);

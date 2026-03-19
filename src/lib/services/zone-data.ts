@@ -6,7 +6,7 @@
  * 출처: 전국학교학구도연계정보표준데이터 (data.go.kr)
  */
 
-import { prisma } from "@/lib/db/prisma";
+import { prisma, isDbConnected } from "@/lib/db/prisma";
 import {
   getDistrictZonesByRegion,
   getDistrictZonesByEduSupport,
@@ -129,28 +129,30 @@ export async function getZonesByRegion(
   regionCode: string,
   eduSupportCode?: string
 ): Promise<{ data: ZoneMapping[]; source: DataSource }> {
-  // 1. DB 캐시 조회
-  try {
-    const where: Record<string, string> = { sidoEduCode: regionCode };
-    if (eduSupportCode) where.eduSupportCode = eduSupportCode;
+  // 1. DB 캐시 조회 (fast-fail if disconnected)
+  if (await isDbConnected()) {
+    try {
+      const where: Record<string, string> = { sidoEduCode: regionCode };
+      if (eduSupportCode) where.eduSupportCode = eduSupportCode;
 
-    const dbRows = await prisma.districtZone.findMany({ where });
-    if (dbRows.length > 0) {
-      const rows: DistrictZoneRow[] = dbRows.map((r) => ({
-        atndsklId: r.zoneId,
-        schoolId: r.schoolId,
-        schulNm: r.schoolName,
-        enfsType: r.schoolLevel,
-        cddcCode: r.sidoEduCode,
-        cddcNm: r.sidoEduName,
-        edcSport: r.eduSupportCode,
-        edcSportNm: r.eduSupportName,
-        referenceDate: r.referenceDate ?? undefined,
-      }));
-      return { data: groupByZone(rows), source: "db" };
+      const dbRows = await prisma.districtZone.findMany({ where });
+      if (dbRows.length > 0) {
+        const rows: DistrictZoneRow[] = dbRows.map((r) => ({
+          atndsklId: r.zoneId,
+          schoolId: r.schoolId,
+          schulNm: r.schoolName,
+          enfsType: r.schoolLevel,
+          cddcCode: r.sidoEduCode,
+          cddcNm: r.sidoEduName,
+          edcSport: r.eduSupportCode,
+          edcSportNm: r.eduSupportName,
+          referenceDate: r.referenceDate ?? undefined,
+        }));
+        return { data: groupByZone(rows), source: "db" };
+      }
+    } catch {
+      // DB 에러
     }
-  } catch {
-    // DB 실패 → API fallback
   }
 
   // 2. 공공 API 조회
@@ -190,26 +192,28 @@ export async function getZonesByRegion(
 export async function getZonesForSchool(
   schoolName: string
 ): Promise<{ data: ZoneMapping[]; source: DataSource }> {
-  // 1. DB
-  try {
-    const dbRows = await prisma.districtZone.findMany({
-      where: { schoolName: { contains: schoolName } },
-    });
-    if (dbRows.length > 0) {
-      const rows: DistrictZoneRow[] = dbRows.map((r) => ({
-        atndsklId: r.zoneId,
-        schoolId: r.schoolId,
-        schulNm: r.schoolName,
-        enfsType: r.schoolLevel,
-        cddcCode: r.sidoEduCode,
-        cddcNm: r.sidoEduName,
-        edcSport: r.eduSupportCode,
-        edcSportNm: r.eduSupportName,
-      }));
-      return { data: groupByZone(rows), source: "db" };
+  // 1. DB (fast-fail if disconnected)
+  if (await isDbConnected()) {
+    try {
+      const dbRows = await prisma.districtZone.findMany({
+        where: { schoolName: { contains: schoolName } },
+      });
+      if (dbRows.length > 0) {
+        const rows: DistrictZoneRow[] = dbRows.map((r) => ({
+          atndsklId: r.zoneId,
+          schoolId: r.schoolId,
+          schulNm: r.schoolName,
+          enfsType: r.schoolLevel,
+          cddcCode: r.sidoEduCode,
+          cddcNm: r.sidoEduName,
+          edcSport: r.eduSupportCode,
+          edcSportNm: r.eduSupportName,
+        }));
+        return { data: groupByZone(rows), source: "db" };
+      }
+    } catch {
+      // DB 에러
     }
-  } catch {
-    // DB 실패
   }
 
   // 2. API
@@ -236,45 +240,46 @@ export async function getZonesForSchool(
 export async function getEduSupportOffices(
   regionCode?: string
 ): Promise<{ data: EduSupportOffice[]; source: DataSource }> {
-  // 1. DB — groupBy로 교육지원청별 학구 수
-  try {
-    const where = regionCode ? { sidoEduCode: regionCode } : {};
-    const grouped = await prisma.districtZone.groupBy({
-      by: ["eduSupportCode", "eduSupportName"],
-      where,
-      _count: { zoneId: true },
-    });
-
-    if (grouped.length > 0) {
-      // 학구 수는 distinct zoneId 기준
-      const codeToZones = new Map<string, Set<string>>();
-      const codeToName = new Map<string, string>();
-
-      const allRows = await prisma.districtZone.findMany({
+  // 1. DB — groupBy로 교육지원청별 학구 수 (fast-fail if disconnected)
+  if (await isDbConnected()) {
+    try {
+      const where = regionCode ? { sidoEduCode: regionCode } : {};
+      const grouped = await prisma.districtZone.groupBy({
+        by: ["eduSupportCode", "eduSupportName"],
         where,
-        select: { eduSupportCode: true, eduSupportName: true, zoneId: true },
+        _count: { zoneId: true },
       });
 
-      for (const row of allRows) {
-        if (!codeToZones.has(row.eduSupportCode)) {
-          codeToZones.set(row.eduSupportCode, new Set());
-          codeToName.set(row.eduSupportCode, row.eduSupportName);
+      if (grouped.length > 0) {
+        const codeToZones = new Map<string, Set<string>>();
+        const codeToName = new Map<string, string>();
+
+        const allRows = await prisma.districtZone.findMany({
+          where,
+          select: { eduSupportCode: true, eduSupportName: true, zoneId: true },
+        });
+
+        for (const row of allRows) {
+          if (!codeToZones.has(row.eduSupportCode)) {
+            codeToZones.set(row.eduSupportCode, new Set());
+            codeToName.set(row.eduSupportCode, row.eduSupportName);
+          }
+          codeToZones.get(row.eduSupportCode)!.add(row.zoneId);
         }
-        codeToZones.get(row.eduSupportCode)!.add(row.zoneId);
+
+        const data: EduSupportOffice[] = Array.from(codeToZones.entries()).map(
+          ([code, zones]) => ({
+            code,
+            name: codeToName.get(code) ?? code,
+            zoneCount: zones.size,
+          })
+        );
+
+        return { data: data.sort((a, b) => a.name.localeCompare(b.name)), source: "db" };
       }
-
-      const data: EduSupportOffice[] = Array.from(codeToZones.entries()).map(
-        ([code, zones]) => ({
-          code,
-          name: codeToName.get(code) ?? code,
-          zoneCount: zones.size,
-        })
-      );
-
-      return { data: data.sort((a, b) => a.name.localeCompare(b.name)), source: "db" };
+    } catch {
+      // DB 에러
     }
-  } catch {
-    // DB 실패
   }
 
   // 2. API → 교육지원청 목록 추출

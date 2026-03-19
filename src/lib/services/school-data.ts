@@ -7,7 +7,7 @@
  *   3. Mock 데이터 — API도 실패 시 fallback
  */
 
-import { prisma } from "@/lib/db/prisma";
+import { prisma, isDbConnected } from "@/lib/db/prisma";
 import { searchSchools, getSchoolByCode } from "@/lib/api/neis";
 import type { NeisSchoolRow } from "@/lib/api/neis";
 import {
@@ -49,39 +49,41 @@ export async function getSchoolList(filters: {
   page: number;
   limit: number;
 }): Promise<{ data: SchoolItem[]; total: number; source: DataSource }> {
-  // 1. Try DB
-  try {
-    const where: Record<string, unknown> = {};
-    if (filters.region) where.regionCode = filters.region;
-    if (filters.type) where.schoolType = filters.type;
-    if (filters.search) where.schoolName = { contains: filters.search };
-    if (filters.district) where.district = filters.district;
+  // 1. Try DB (fast-fail if disconnected)
+  if (await isDbConnected()) {
+    try {
+      const where: Record<string, unknown> = {};
+      if (filters.region) where.regionCode = filters.region;
+      if (filters.type) where.schoolType = filters.type;
+      if (filters.search) where.schoolName = { contains: filters.search };
+      if (filters.district) where.district = filters.district;
 
-    const [total, schools] = await Promise.all([
-      prisma.school.count({ where }),
-      prisma.school.findMany({
-        where,
-        skip: (filters.page - 1) * filters.limit,
-        take: filters.limit,
-        orderBy: { schoolName: "asc" },
-      }),
-    ]);
+      const [total, schools] = await Promise.all([
+        prisma.school.count({ where }),
+        prisma.school.findMany({
+          where,
+          skip: (filters.page - 1) * filters.limit,
+          take: filters.limit,
+          orderBy: { schoolName: "asc" },
+        }),
+      ]);
 
-    if (schools.length > 0) {
-      const data = schools.map((s) => ({
-        schoolCode: s.schoolCode,
-        schoolName: s.schoolName,
-        schoolType: s.schoolType as "elementary" | "middle" | "high",
-        regionCode: s.regionCode,
-        district: s.district,
-        latitude: s.latitude,
-        longitude: s.longitude,
-        address: s.address,
-      }));
-      return { data, total, source: "db" };
+      if (schools.length > 0) {
+        const data = schools.map((s) => ({
+          schoolCode: s.schoolCode,
+          schoolName: s.schoolName,
+          schoolType: s.schoolType as "elementary" | "middle" | "high",
+          regionCode: s.regionCode,
+          district: s.district,
+          latitude: s.latitude,
+          longitude: s.longitude,
+          address: s.address,
+        }));
+        return { data, total, source: "db" };
+      }
+    } catch (e) {
+      console.error("[getSchoolList] DB 에러:", e instanceof Error ? e.message : e);
     }
-  } catch (e) {
-    console.error("[getSchoolList] DB 에러:", e instanceof Error ? e.message : e);
   }
 
   // 2. Try NEIS API (검색어가 있을 때만 — 전체 목록 조회는 비효율)
@@ -145,22 +147,24 @@ export async function getSchoolList(filters: {
 export async function getSchoolDetail(
   schoolCode: string
 ): Promise<{ data: SchoolDetail | null; source: DataSource }> {
-  // 1. Try DB
-  try {
-    const school = await prisma.school.findUnique({
-      where: { schoolCode },
-      include: {
-        teacherStats: { where: { year: 2024 }, take: 1 },
-        financeStats: { where: { year: 2024 }, take: 1 },
-        afterschoolProgram: { where: { year: 2024 } },
-      },
-    });
+  // 1. Try DB (fast-fail if disconnected)
+  if (await isDbConnected()) {
+    try {
+      const school = await prisma.school.findUnique({
+        where: { schoolCode },
+        include: {
+          teacherStats: { where: { year: 2024 }, take: 1 },
+          financeStats: { where: { year: 2024 }, take: 1 },
+          afterschoolProgram: { where: { year: 2024 } },
+        },
+      });
 
-    if (school) {
-      return { data: mapPrismaToSchoolDetail(school), source: "db" };
+      if (school) {
+        return { data: mapPrismaToSchoolDetail(school), source: "db" };
+      }
+    } catch {
+      // DB 에러
     }
-  } catch {
-    // DB 미연결
   }
 
   // 2. Try public APIs
@@ -224,79 +228,81 @@ export async function getSchoolRiskData(filters?: {
   region?: string;
   district?: string;
 }): Promise<{ data: RiskRawData[]; source: DataSource }> {
-  // 1. Try DB — 경량 쿼리
-  try {
-    const where: Record<string, unknown> = {};
-    if (filters?.region) where.regionCode = filters.region;
-    if (filters?.district) where.district = filters.district;
+  // 1. Try DB — 경량 쿼리 (fast-fail if disconnected)
+  if (await isDbConnected()) {
+    try {
+      const where: Record<string, unknown> = {};
+      if (filters?.region) where.regionCode = filters.region;
+      if (filters?.district) where.district = filters.district;
 
-    const schools = await prisma.school.findMany({
-      where,
-      select: {
-        schoolCode: true,
-        schoolName: true,
-        district: true,
-        teacherStats: {
-          where: { year: 2024 },
-          select: {
-            studentsPerTeacher: true,
-            tempTeacherRatio: true,
-            totalTeachers: true,
-            totalStudents: true,
-            femaleTeachers: true,
-            maleTeachers: true,
-            lecturerCount: true,
-            currentClasses: true,
-            authorizedClasses: true,
+      const schools = await prisma.school.findMany({
+        where,
+        select: {
+          schoolCode: true,
+          schoolName: true,
+          district: true,
+          teacherStats: {
+            where: { year: 2024 },
+            select: {
+              studentsPerTeacher: true,
+              tempTeacherRatio: true,
+              totalTeachers: true,
+              totalStudents: true,
+              femaleTeachers: true,
+              maleTeachers: true,
+              lecturerCount: true,
+              currentClasses: true,
+              authorizedClasses: true,
+            },
+            take: 1,
           },
-          take: 1,
+          financeStats: {
+            where: { year: 2024 },
+            select: { budgetPerStudent: true },
+            take: 1,
+          },
+          _count: { select: { afterschoolProgram: true } },
         },
-        financeStats: {
-          where: { year: 2024 },
-          select: { budgetPerStudent: true },
-          take: 1,
-        },
-        _count: { select: { afterschoolProgram: true } },
-      },
-    });
+      });
 
-    if (schools.length > 0) {
-      // 학원 데이터 조인
-      let academyMap: Map<string, number> = new Map();
-      try {
-        const { getAcademyStats } = await import("./academy-data");
-        const { data: academyData } = await getAcademyStats({ regionCode: filters?.region ?? "" });
-        academyMap = new Map(academyData.map((a) => [a.district, a.totalAcademies]));
-      } catch {
-        // 학원 데이터 조회 실패 시 무시
+      if (schools.length > 0) {
+        // 학원 데이터 조인
+        let academyMap: Map<string, number> = new Map();
+        try {
+          const { getAcademyStats } = await import("./academy-data");
+          const { data: academyData } = await getAcademyStats({ regionCode: filters?.region ?? "" });
+          academyMap = new Map(academyData.map((a) => [a.district, a.totalAcademies]));
+        } catch {
+          // 학원 데이터 조회 실패 시 무시
+        }
+
+        return {
+          data: schools.map((s) => {
+            const ts = s.teacherStats[0];
+            return {
+              schoolCode: s.schoolCode,
+              schoolName: s.schoolName,
+              district: s.district,
+              studentsPerTeacher: ts?.studentsPerTeacher ?? null,
+              tempTeacherRatio: ts?.tempTeacherRatio ?? null,
+              budgetPerStudent: s.financeStats[0]?.budgetPerStudent ?? null,
+              programCount: s._count.afterschoolProgram,
+              femaleTeachers: ts?.femaleTeachers ?? null,
+              maleTeachers: ts?.maleTeachers ?? null,
+              lecturerCount: ts?.lecturerCount ?? null,
+              totalTeachers: ts?.totalTeachers ?? null,
+              currentClasses: ts?.currentClasses ?? null,
+              authorizedClasses: ts?.authorizedClasses ?? null,
+              totalStudents: ts?.totalStudents ?? null,
+              nearbyAcademyCount: academyMap.get(s.district) ?? null,
+            };
+          }),
+          source: "db",
+        };
       }
-
-      return {
-        data: schools.map((s) => {
-          const ts = s.teacherStats[0];
-          return {
-            schoolCode: s.schoolCode,
-            schoolName: s.schoolName,
-            district: s.district,
-            studentsPerTeacher: ts?.studentsPerTeacher ?? null,
-            tempTeacherRatio: ts?.tempTeacherRatio ?? null,
-            budgetPerStudent: s.financeStats[0]?.budgetPerStudent ?? null,
-            programCount: s._count.afterschoolProgram,
-            femaleTeachers: ts?.femaleTeachers ?? null,
-            maleTeachers: ts?.maleTeachers ?? null,
-            lecturerCount: ts?.lecturerCount ?? null,
-            totalTeachers: ts?.totalTeachers ?? null,
-            currentClasses: ts?.currentClasses ?? null,
-            authorizedClasses: ts?.authorizedClasses ?? null,
-            totalStudents: ts?.totalStudents ?? null,
-            nearbyAcademyCount: academyMap.get(s.district) ?? null,
-          };
-        }),
-        source: "db",
-      };
+    } catch {
+      // DB 에러
     }
-  } catch {
-    // DB 미연결
   }
 
   // 2. Fallback: 기존 getSchoolDetails 사용
@@ -337,29 +343,31 @@ export async function getSchoolDetails(filters?: {
     };
   }
 
-  // 1. Try DB (전체/지역 조회)
-  try {
-    const where: Record<string, unknown> = {};
-    if (filters?.region) where.regionCode = filters.region;
-    if (filters?.district) where.district = filters.district;
+  // 1. Try DB (전체/지역 조회, fast-fail if disconnected)
+  if (await isDbConnected()) {
+    try {
+      const where: Record<string, unknown> = {};
+      if (filters?.region) where.regionCode = filters.region;
+      if (filters?.district) where.district = filters.district;
 
-    const schools = await prisma.school.findMany({
-      where,
-      include: {
-        teacherStats: { where: { year: 2024 }, take: 1 },
-        financeStats: { where: { year: 2024 }, take: 1 },
-        afterschoolProgram: { where: { year: 2024 }, take: 10 },
-      },
-    });
+      const schools = await prisma.school.findMany({
+        where,
+        include: {
+          teacherStats: { where: { year: 2024 }, take: 1 },
+          financeStats: { where: { year: 2024 }, take: 1 },
+          afterschoolProgram: { where: { year: 2024 }, take: 10 },
+        },
+      });
 
-    if (schools.length > 0) {
-      return {
-        data: schools.map(mapPrismaToSchoolDetail),
-        source: "db",
-      };
+      if (schools.length > 0) {
+        return {
+          data: schools.map(mapPrismaToSchoolDetail),
+          source: "db",
+        };
+      }
+    } catch {
+      // DB 에러
     }
-  } catch {
-    // DB 미연결
   }
 
   // 2. Try 학교알리미 API (지역 전체 조회)

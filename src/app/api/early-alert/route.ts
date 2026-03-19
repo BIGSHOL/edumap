@@ -9,7 +9,7 @@ import {
   buildSchoolRiskContext,
   buildRegionSummaryPrompt,
 } from "@/lib/ai/prompts-gemini";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, isDbConnected } from "@/lib/db/prisma";
 
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -21,24 +21,26 @@ export async function GET(request: Request) {
   // 개별 학교 위험도 조회 (상세 포함, RiskScore DB 캐싱)
   if (schoolCode) {
     // RiskScore 캐시 확인 (6시간 이내)
-    try {
-      const cached = await prisma.riskScore.findUnique({
-        where: { idx_risk_school_year: { schoolCode, year: 2024 } },
-      });
-      if (cached && (Date.now() - cached.calculatedAt.getTime()) < 6 * 60 * 60 * 1000) {
-        return NextResponse.json({
-          data: {
-            schoolCode: cached.schoolCode,
-            year: cached.year,
-            score: cached.score,
-            level: cached.score <= 30 ? "safe" : cached.score <= 50 ? "caution" : cached.score <= 70 ? "warning" : "danger",
-            contributingFactors: cached.contributingFactors ?? [],
-          },
-          meta: { source: "DB 캐시 (RiskScore)" },
+    if (await isDbConnected()) {
+      try {
+        const cached = await prisma.riskScore.findUnique({
+          where: { idx_risk_school_year: { schoolCode, year: 2024 } },
         });
+        if (cached && (Date.now() - cached.calculatedAt.getTime()) < 6 * 60 * 60 * 1000) {
+          return NextResponse.json({
+            data: {
+              schoolCode: cached.schoolCode,
+              year: cached.year,
+              score: cached.score,
+              level: cached.score <= 30 ? "safe" : cached.score <= 50 ? "caution" : cached.score <= 70 ? "warning" : "danger",
+              contributingFactors: cached.contributingFactors ?? [],
+            },
+            meta: { source: "DB 캐시 (RiskScore)" },
+          });
+        }
+      } catch {
+        // DB 에러
       }
-    } catch {
-      // DB 미연결
     }
 
     const { data, source } = await getSchoolDetail(schoolCode);
@@ -77,6 +79,7 @@ export async function GET(request: Request) {
   const allScores = schools.map((school) => ({
     ...calculateRiskScoreFromRaw(school),
     schoolName: school.schoolName,
+    nearbyAcademyCount: school.nearbyAcademyCount ?? null,
   }));
 
   // 집계
@@ -99,6 +102,7 @@ export async function GET(request: Request) {
       score: s.score,
       level: s.level,
       factors: s.factors,
+      nearbyAcademyCount: s.nearbyAcademyCount,
     }));
 
   // --- AI 해설 (Gemini 2.5 Flash) ---
@@ -123,6 +127,7 @@ export async function GET(request: Request) {
               description: f.description ?? f.value ?? "",
               weight: f.weight ?? 0,
             })) ?? [],
+            nearbyAcademyCount: s.nearbyAcademyCount,
           }),
         })),
         reportType: "risk-narrative",

@@ -6,6 +6,7 @@ import "leaflet/dist/leaflet.css";
 
 export interface ZoneMarker {
   zoneId: string;
+  zoneName: string;
   schools: Array<{
     schoolName: string;
     latitude: number | null;
@@ -146,7 +147,7 @@ export function ZoneClusterMap({
 
       outerMarker.bindPopup(
         `<div style="font-size:13px;font-family:Pretendard,sans-serif;max-width:250px;">
-          <strong>학구 ${zone.zoneId}</strong>
+          <strong>${zone.zoneName}</strong>
           <span style="color:${color};font-weight:600;margin-left:8px;">${levelLabel}</span>
           <br/>학교 ${zone.schoolCount}개 | 평균 위험도 ${zone.avgRiskScore}점
           ${zone.eduSupportName ? `<br/><span style="font-size:11px;color:#666;">${zone.eduSupportName}</span>` : ""}

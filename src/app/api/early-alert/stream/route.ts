@@ -32,6 +32,7 @@ export async function GET(request: Request) {
       const allScores = schools.map((school) => ({
         ...calculateRiskScoreFromRaw(school),
         schoolName: school.schoolName,
+        nearbyAcademyCount: school.nearbyAcademyCount ?? null,
       }));
 
       // 집계
@@ -53,6 +54,7 @@ export async function GET(request: Request) {
           score: s.score,
           level: s.level,
           factors: s.factors,
+          nearbyAcademyCount: s.nearbyAcademyCount,
         }));
 
       sse.progress(35, `위험도 계산 완료 — 위험/경고 ${topRisk.length}개교 발견`);
@@ -80,6 +82,7 @@ export async function GET(request: Request) {
                   description: f.description ?? f.value ?? "",
                   weight: f.weight ?? 0,
                 })) ?? [],
+                nearbyAcademyCount: s.nearbyAcademyCount,
               }),
             })),
             reportType: "risk-narrative",

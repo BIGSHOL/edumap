@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/db/prisma";
+import { prisma, isDbConnected } from "@/lib/db/prisma";
 
 /**
  * GET /api/risk-summary
@@ -12,6 +12,13 @@ import { prisma } from "@/lib/db/prisma";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const region = searchParams.get("region");
+
+  if (!(await isDbConnected())) {
+    return NextResponse.json({
+      data: [],
+      meta: { source: "학교알리미 (DB 미연결)", total: 0 },
+    });
+  }
 
   try {
     const where: Record<string, unknown> = {};

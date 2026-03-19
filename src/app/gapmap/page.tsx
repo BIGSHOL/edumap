@@ -175,6 +175,7 @@ export default function GapMapPage() {
     .filter((z) => z.schools.length > 0)
     .map((z) => ({
       zoneId: z.zoneId,
+      zoneName: z.zoneName,
       schools: z.schools.map((s) => ({
         schoolName: s.schoolName,
         latitude: null, // API에서 좌표를 별도로 가져와야 함
@@ -476,7 +477,7 @@ export default function GapMapPage() {
                             }`}
                           >
                             <td className="px-3 py-2">
-                              <p className="font-medium text-text-primary text-xs truncate max-w-[160px]">{zone.zoneId}</p>
+                              <p className="font-medium text-text-primary text-xs truncate max-w-[160px]">{zone.zoneName}</p>
                               {zone.eduSupportName && (
                                 <p className="text-[10px] text-text-secondary truncate max-w-[160px]">
                                   {zone.eduSupportName.replace(/교육지원청$/, "")}
@@ -617,7 +618,7 @@ function ZoneDetail({ zone }: { zone: ZoneAnalysisResult }) {
       <div className="bg-surface border border-border rounded-lg p-5">
         <div className="flex items-center justify-between mb-3">
           <div>
-            <h3 className="text-lg font-bold text-text-primary">학구 {zone.zoneId}</h3>
+            <h3 className="text-lg font-bold text-text-primary">{zone.zoneName}</h3>
             {zone.eduSupportName && (
               <p className="text-xs text-text-secondary mt-0.5">{zone.eduSupportName}</p>
             )}

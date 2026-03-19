@@ -135,8 +135,9 @@ export default function Home() {
     loadRiskData(selectedRegion, selectedDistrict || undefined);
   }, [selectedRegion, selectedDistrict, loadSchools, loadRiskData]);
 
-  // 페이지 변경
+  // 페이지 변경 (초기 로드와 중복 방지: page=1일 때는 위 useEffect가 처리)
   useEffect(() => {
+    if (currentPage === 1) return;
     loadSchools(selectedRegion, currentPage, {
       search: searchQuery || undefined,
       district: selectedDistrict || undefined,

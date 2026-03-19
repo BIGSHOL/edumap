@@ -17,6 +17,7 @@ import { analyzeGaps } from "./gapmap";
 
 export interface ZoneAnalysisResult {
   zoneId: string;
+  zoneName: string; // 한글 학구명
   schoolCount: number;
   schools: Array<{
     schoolCode: string;
@@ -52,9 +53,12 @@ export function analyzeZone(
   schools: SchoolDetail[],
   eduSupportInfo?: { code: string; name: string }
 ): ZoneAnalysisResult {
+  const zoneName = buildZoneName(zoneId, schools, eduSupportInfo);
+
   if (schools.length === 0) {
     return {
       zoneId,
+      zoneName,
       schoolCount: 0,
       schools: [],
       avgRiskScore: 50,
@@ -134,6 +138,7 @@ export function analyzeZone(
 
   return {
     zoneId,
+    zoneName,
     schoolCount: schoolResults.length,
     schools: schoolResults.map((r) => ({
       schoolCode: r.schoolCode,
@@ -154,4 +159,51 @@ export function analyzeZone(
     eduSupportCode: eduSupportInfo?.code ?? null,
     eduSupportName: eduSupportInfo?.name ?? null,
   };
+}
+
+/**
+ * 학구 한글명 생성
+ *
+ * 우선순위:
+ * 1. 소속 학교명 기반: "종로 서울대부설초·경복중 학구"
+ * 2. 교육지원청 기반: "동부교육지원청 학구"
+ * 3. 학구ID fallback
+ */
+function buildZoneName(
+  zoneId: string,
+  schools: SchoolDetail[],
+  eduSupportInfo?: { code: string; name: string }
+): string {
+  if (schools.length > 0) {
+    // 학교명을 짧게 축약 (접미사 제거)
+    const shortNames = schools.map((s) =>
+      s.schoolName
+        .replace(/초등학교$/, "초")
+        .replace(/중학교$/, "중")
+        .replace(/고등학교$/, "고")
+    );
+
+    // 2개까지만 표시
+    const display =
+      shortNames.length <= 2
+        ? shortNames.join("·")
+        : `${shortNames[0]} 외 ${shortNames.length - 1}교`;
+
+    // 시군구 추출
+    const district = schools[0].district;
+    if (district) {
+      return `${district} ${display} 학구`;
+    }
+    return `${display} 학구`;
+  }
+
+  if (eduSupportInfo?.name) {
+    // "서울특별시동부교육지원청" → "동부" 추출
+    const short = eduSupportInfo.name
+      .replace(/.*시|.*도|.*청$/, "")
+      .replace(/교육지원$/, "");
+    return short ? `${short} 학구` : `${eduSupportInfo.name} 학구`;
+  }
+
+  return `학구 ${zoneId}`;
 }

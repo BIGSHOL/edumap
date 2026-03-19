@@ -2,6 +2,7 @@ import { getSchoolDetails } from "@/lib/services/school-data";
 import { analyzeGaps } from "@/lib/analysis/gapmap";
 import { generateWithClaude } from "@/lib/ai/gemini";
 import { buildGapSuggestionPrompt, buildGapSchoolContext } from "@/lib/ai/prompts-gemini";
+import { getAcademyStats } from "@/lib/services/academy-data";
 import { createSSEStream } from "@/lib/sse";
 
 /**
@@ -28,9 +29,24 @@ export async function GET(request: Request) {
         return;
       }
 
-      sse.progress(25, "방과후 프로그램 현황을 분석하고 있습니다...");
+      sse.progress(20, "학원 현황 데이터를 조회하고 있습니다...");
 
-      const result = analyzeGaps(schools[0]);
+      // 학원 통계 조회
+      let academyStats;
+      try {
+        const school = schools[0];
+        const { data } = await getAcademyStats({
+          regionCode: school.regionCode,
+          district: school.district,
+        });
+        academyStats = data.find((a) => a.district === school.district);
+      } catch {
+        // 학원 데이터 없어도 분석 가능
+      }
+
+      sse.progress(30, "방과후 프로그램 현황을 분석하고 있습니다...");
+
+      const result = analyzeGaps(schools[0], academyStats);
 
       sse.progress(40, `공백 ${result.totalGaps}건 발견 — AI 개선 방안을 준비하고 있습니다...`);
 

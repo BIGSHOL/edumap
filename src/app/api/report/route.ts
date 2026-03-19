@@ -1,5 +1,6 @@
 import { getSchoolDetail } from "@/lib/services/school-data";
 import { generateReport } from "@/lib/ai/report-generator";
+import { getAcademyStats } from "@/lib/services/academy-data";
 import type { ReportType } from "@/types/report";
 
 const VALID_REPORT_TYPES = ["policy", "teacher", "parent"] as const;
@@ -57,8 +58,21 @@ export async function POST(request: Request) {
       finalDetail = mockSchoolDetail;
     }
 
+    // 학원 통계 조회 (리포트에 학원 컨텍스트 포함, 3초 타임아웃)
+    let academyStats;
+    try {
+      const timeout = new Promise<never>((_, reject) => setTimeout(() => reject(new Error("timeout")), 3000));
+      const { data } = await Promise.race([
+        getAcademyStats({ regionCode: finalDetail.regionCode, district: finalDetail.district }),
+        timeout,
+      ]);
+      academyStats = data.find((a) => a.district === finalDetail.district);
+    } catch {
+      // 학원 데이터 없어도 리포트 생성 가능
+    }
+
     // AI 리포트 생성 (API 키 없으면 자동 fallback)
-    const reportContent = await generateReport(validType, finalDetail);
+    const reportContent = await generateReport(validType, finalDetail, academyStats);
 
     return Response.json({
       data: {

@@ -16,6 +16,7 @@ import {
   buildSchoolRiskContext,
 } from "@/lib/ai/prompts-gemini";
 import { calculateRiskScoreFromRaw } from "@/lib/analysis/early-alert";
+import { getAcademyStats } from "@/lib/services/academy-data";
 
 /**
  * AI 인사이트 통합 API
@@ -59,10 +60,17 @@ async function handleComparison(params: URLSearchParams) {
   const schoolCode = params.get("schoolCode");
   const regionCode = params.get("region") ?? "B10";
 
-  const { data: schools } = await getSchoolRiskData({ region: regionCode });
+  // 학교 + 학원 데이터 병렬 조회
+  const [{ data: schools }, { data: academyData }] = await Promise.all([
+    getSchoolRiskData({ region: regionCode }),
+    getAcademyStats({ regionCode }),
+  ]);
   if (schools.length === 0) {
     return NextResponse.json({ data: {} });
   }
+
+  // 시군구별 학원 수 맵
+  const academyMap = new Map(academyData.map((a) => [a.district, a.totalAcademies]));
 
   // 지역 평균 계산
   const avg = {
@@ -78,11 +86,13 @@ async function handleComparison(params: URLSearchParams) {
     if (s.budgetPerStudent != null) { avg.budgetPerStudent += s.budgetPerStudent; count.bps++; }
     avg.programCount += s.programCount; count.pc++;
   }
+  const totalAcademySum = academyData.reduce((s, a) => s + a.totalAcademies, 0);
   const regionAvg = {
     studentsPerTeacher: count.spt > 0 ? Math.round((avg.studentsPerTeacher / count.spt) * 10) / 10 : 16,
     tempTeacherRatio: count.ttr > 0 ? avg.tempTeacherRatio / count.ttr : 0.15,
     budgetPerStudent: count.bps > 0 ? avg.budgetPerStudent / count.bps : 3500000,
     programCount: count.pc > 0 ? Math.round(avg.programCount / count.pc) : 5,
+    academyCount: academyData.length > 0 ? Math.round(totalAcademySum / academyData.length) : 0,
   };
 
   // 특정 학교 또는 상위 10개
@@ -93,7 +103,11 @@ async function handleComparison(params: URLSearchParams) {
   const result = await batchGenerateWithGemini({
     items: targets.map((s) => ({
       key: s.schoolCode,
-      context: buildComparisonContext({ ...s, regionAvg }),
+      context: buildComparisonContext({
+        ...s,
+        nearbyAcademyCount: s.district ? (academyMap.get(s.district) ?? null) : null,
+        regionAvg,
+      }),
     })),
     reportType: "comparison",
     promptBuilder: buildComparisonPrompt,
@@ -159,15 +173,21 @@ async function handleSmartSearch(params: URLSearchParams) {
   return NextResponse.json({ data: filters, cached: result.cached });
 }
 
-/** 정책 개입 우선순위 — Claude Sonnet 4.5 */
+/** 정책 개입 우선순위 — Claude Sonnet */
 async function handlePolicyPriority(params: URLSearchParams) {
   const regionCode = params.get("region") ?? "B10";
 
-  const { data: schools } = await getSchoolRiskData({ region: regionCode });
+  const [{ data: schools }, { data: academyData }] = await Promise.all([
+    getSchoolRiskData({ region: regionCode }),
+    getAcademyStats({ regionCode }),
+  ]);
+  const academyMap = new Map(academyData.map((a) => [a.district, a.totalAcademies]));
+
   const allScores = schools
     .map((school) => ({
       ...calculateRiskScoreFromRaw(school),
       schoolName: school.schoolName,
+      district: school.district,
     }))
     .sort((a, b) => b.score - a.score);
 
@@ -183,7 +203,14 @@ async function handlePolicyPriority(params: URLSearchParams) {
       schoolName: s.schoolName,
       score: s.score,
       level: s.level,
-      factors: [],
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      factors: s.factors?.map((f: any) => ({
+        factor: f.factor ?? "",
+        value: typeof f.value === "number" ? f.value : parseFloat(f.value) || 0,
+        description: f.description ?? f.value ?? "",
+        weight: f.weight ?? 0,
+      })) ?? [],
+      nearbyAcademyCount: s.district ? (academyMap.get(s.district) ?? null) : null,
     })
   );
 

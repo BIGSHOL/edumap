@@ -27,6 +27,7 @@ export type ZoneSchoolSummary = z.infer<typeof ZoneSchoolSummarySchema>;
 /** 학구 분석 결과 */
 export const ZoneAnalysisResultSchema = z.object({
   zoneId: z.string(),
+  zoneName: z.string(), // 한글 학구명 (예: "종로구 서울대부설초 학구")
   schoolCount: z.number(),
   schools: z.array(ZoneSchoolSummarySchema),
   // 학구 평균 지표

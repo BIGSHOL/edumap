@@ -5,7 +5,7 @@
  * 시군구 단위로 집계하여 저장 (개별 학원 X)
  */
 
-import { prisma } from "@/lib/db/prisma";
+import { prisma, isDbConnected } from "@/lib/db/prisma";
 import { getAcademiesByRegion } from "@/lib/api/academy";
 import type { AcademyRow } from "@/lib/api/academy";
 import type { DataSource } from "./utils";
@@ -30,28 +30,30 @@ export async function getAcademyStats(params: {
 }): Promise<{ data: AcademyStatsData[]; source: DataSource }> {
   const { regionCode, district } = params;
 
-  // 1단계: DB 조회
-  try {
-    const where: Record<string, unknown> = { regionCode, year: 2024 };
-    if (district) where.district = district;
+  // 1단계: DB 조회 (fast-fail if disconnected)
+  if (await isDbConnected()) {
+    try {
+      const where: Record<string, unknown> = { regionCode, year: 2024 };
+      if (district) where.district = district;
 
-    const cached = await prisma.academyStats.findMany({ where });
+      const cached = await prisma.academyStats.findMany({ where });
 
-    if (cached.length > 0) {
-      return {
-        data: cached.map((c) => ({
-          regionCode: c.regionCode,
-          district: c.district,
-          year: c.year,
-          totalAcademies: c.totalAcademies,
-          totalCapacity: c.totalCapacity,
-          academyByRealm: c.academyByRealm as Record<string, number>,
-        })),
-        source: "db",
-      };
+      if (cached.length > 0) {
+        return {
+          data: cached.map((c) => ({
+            regionCode: c.regionCode,
+            district: c.district,
+            year: c.year,
+            totalAcademies: c.totalAcademies,
+            totalCapacity: c.totalCapacity,
+            academyByRealm: c.academyByRealm as Record<string, number>,
+          })),
+          source: "db",
+        };
+      }
+    } catch {
+      // DB 에러
     }
-  } catch {
-    // DB 미연결 시 API fallback
   }
 
   // 2단계: NEIS API 호출 + 집계

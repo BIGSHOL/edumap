@@ -16,6 +16,7 @@ interface RiskFactorContext {
     description: string;
     weight: number;
   }[];
+  nearbyAcademyCount?: number | null; // 주변 학원 수
 }
 
 /**
@@ -54,11 +55,17 @@ export function buildSchoolRiskContext(school: RiskFactorContext): string {
     .map((f) => `  - ${f.factor}: ${f.description} (가중치 ${(f.weight * 100).toFixed(0)}%)`)
     .join("\n");
 
-  return `학교코드: ${school.schoolCode}
-학교명: ${school.schoolName}
-위험도 점수: ${school.score}/100 (${school.level})
-기여 요인:
-${factorLines}`;
+  const lines = [
+    `학교코드: ${school.schoolCode}`,
+    `학교명: ${school.schoolName}`,
+    `위험도 점수: ${school.score}/100 (${school.level})`,
+    `기여 요인:`,
+    factorLines,
+  ];
+  if (school.nearbyAcademyCount != null) {
+    lines.push(`주변 학원 수: ${school.nearbyAcademyCount}개 (${school.nearbyAcademyCount < 50 ? "부족" : "적정"})`);
+  }
+  return lines.join("\n");
 }
 
 /**
@@ -120,18 +127,36 @@ export function buildGapSchoolContext(school: {
   coverageRate: number;
   overallSeverity: string;
   gaps: { type: string; category?: string; severity: string; description: string }[];
+  academySummary?: {
+    totalAcademies: number;
+    academyByCategory: Record<string, number>;
+    hasComplement: boolean;
+  };
 }): string {
   const gapLines = school.gaps
     .map((g) => `  - [${g.severity}] ${g.description}`)
     .join("\n");
 
-  return `학교코드: ${school.schoolCode}
-학교명: ${school.schoolName}
-카테고리 커버리지: ${school.coverageRate}%
-전체 심각도: ${school.overallSeverity}
-총 공백: ${school.totalGaps}건
-공백 상세:
-${gapLines}`;
+  const lines = [
+    `학교코드: ${school.schoolCode}`,
+    `학교명: ${school.schoolName}`,
+    `카테고리 커버리지: ${school.coverageRate}%`,
+    `전체 심각도: ${school.overallSeverity}`,
+    `총 공백: ${school.totalGaps}건`,
+    `공백 상세:`,
+    gapLines,
+  ];
+
+  if (school.academySummary) {
+    const a = school.academySummary;
+    lines.push(`주변 학원 현황: 총 ${a.totalAcademies}개`);
+    for (const [cat, count] of Object.entries(a.academyByCategory)) {
+      lines.push(`  - ${cat}: ${count}개`);
+    }
+    lines.push(`학원 보완 가능: ${a.hasComplement ? "예" : "아니오"}`);
+  }
+
+  return lines.join("\n");
 }
 
 // ============================================================
@@ -174,19 +199,27 @@ export function buildComparisonContext(school: {
   tempTeacherRatio: number | null;
   budgetPerStudent: number | null;
   programCount: number;
+  nearbyAcademyCount?: number | null;
   regionAvg: {
     studentsPerTeacher: number;
     tempTeacherRatio: number;
     budgetPerStudent: number;
     programCount: number;
+    academyCount: number;
   };
 }): string {
-  return `학교코드: ${school.schoolCode}
-학교명: ${school.schoolName}
-교원1인당학생수: ${school.studentsPerTeacher ?? "정보없음"}명 (지역평균: ${school.regionAvg.studentsPerTeacher}명)
-기간제교원비율: ${school.tempTeacherRatio != null ? (school.tempTeacherRatio * 100).toFixed(1) : "정보없음"}% (지역평균: ${(school.regionAvg.tempTeacherRatio * 100).toFixed(1)}%)
-학생1인당교육비: ${school.budgetPerStudent != null ? Math.round(school.budgetPerStudent).toLocaleString() : "정보없음"}원 (지역평균: ${Math.round(school.regionAvg.budgetPerStudent).toLocaleString()}원)
-방과후프로그램: ${school.programCount}개 (지역평균: ${school.regionAvg.programCount}개)`;
+  const lines = [
+    `학교코드: ${school.schoolCode}`,
+    `학교명: ${school.schoolName}`,
+    `교원1인당학생수: ${school.studentsPerTeacher ?? "정보없음"}명 (지역평균: ${school.regionAvg.studentsPerTeacher}명)`,
+    `기간제교원비율: ${school.tempTeacherRatio != null ? (school.tempTeacherRatio * 100).toFixed(1) : "정보없음"}% (지역평균: ${(school.regionAvg.tempTeacherRatio * 100).toFixed(1)}%)`,
+    `학생1인당교육비: ${school.budgetPerStudent != null ? Math.round(school.budgetPerStudent).toLocaleString() : "정보없음"}원 (지역평균: ${Math.round(school.regionAvg.budgetPerStudent).toLocaleString()}원)`,
+    `방과후프로그램: ${school.programCount}개 (지역평균: ${school.regionAvg.programCount}개)`,
+  ];
+  if (school.nearbyAcademyCount != null) {
+    lines.push(`주변학원수: ${school.nearbyAcademyCount}개 (지역평균: ${school.regionAvg.academyCount}개)`);
+  }
+  return lines.join("\n");
 }
 
 // ============================================================
