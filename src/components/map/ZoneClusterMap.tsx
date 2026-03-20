@@ -24,7 +24,7 @@ interface ZoneClusterMapProps {
   zones: ZoneMarker[];
   center?: [number, number];
   zoom?: number;
-  onZoneClick?: (zoneId: string) => void;
+  onZoneClick?: (_zoneId: string) => void;
   selectedZoneId?: string | null;
 }
 

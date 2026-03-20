@@ -1,5 +1,5 @@
 import { getSchoolRiskData } from "@/lib/services/school-data";
-import { calculateRiskScoreFromRaw } from "@/lib/analysis/early-alert";
+import { calculateRiskScoreFromRaw, type FactorBreakdown } from "@/lib/analysis/early-alert";
 import { REGION_NAMES } from "@/lib/constants/regions";
 import { batchGenerateWithGemini, generateWithGemini } from "@/lib/ai/gemini";
 import {
@@ -75,8 +75,7 @@ export async function GET(request: Request) {
                 schoolName: s.schoolName,
                 score: s.score,
                 level: s.level,
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                factors: s.factors?.map((f: any) => ({
+                factors: s.factors?.map((f: FactorBreakdown) => ({
                   factor: f.factor ?? "",
                   value: typeof f.value === "number" ? f.value : parseFloat(f.value) || 0,
                   description: f.description ?? f.value ?? "",

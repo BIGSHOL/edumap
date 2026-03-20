@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod/v4";
 import { getSchoolDetails } from "@/lib/services/school-data";
 import { analyzeGaps } from "@/lib/analysis/gapmap";
 import { sourceLabel } from "@/lib/services/utils";
@@ -6,12 +7,29 @@ import { generateWithClaude } from "@/lib/ai/gemini";
 import { buildGapSuggestionPrompt, buildGapSchoolContext } from "@/lib/ai/prompts-gemini";
 import { getAcademyStats } from "@/lib/services/academy-data";
 
+/** GET 파라미터 검증 스키마 */
+const GapMapQuerySchema = z.object({
+  schoolCode: z.string().min(1).optional(),
+  region: z.string().min(1).optional(),
+  district: z.string().min(1).optional(),
+  limit: z.coerce.number().int().min(1).max(200).optional().default(200),
+});
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const schoolCode = searchParams.get("schoolCode") ?? undefined;
-  const regionCode = searchParams.get("region") ?? undefined;
-  const district = searchParams.get("district") ?? undefined;
-  const limit = Math.min(200, Math.max(1, Number(searchParams.get("limit") ?? 200)));
+
+  const parsed = GapMapQuerySchema.safeParse(Object.fromEntries(searchParams));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: parsed.error.issues.map((i) => i.message).join(", ") } },
+      { status: 400 }
+    );
+  }
+
+  const schoolCode = parsed.data.schoolCode;
+  const regionCode = parsed.data.region;
+  const district = parsed.data.district;
+  const limit = parsed.data.limit;
 
   // 학교 데이터 + 학원 통계 병렬 조회
   const [{ data: schools, source }, { data: academyData }] = await Promise.all([

@@ -9,9 +9,9 @@ interface AiProgressBarProps {
   /** SSE 스트림 URL (지정 시 실제 진행도 표시) */
   streamUrl?: string;
   /** SSE 완료 시 콜백 — 서버가 보낸 최종 데이터를 전달 */
-  onComplete?: (data: unknown) => void;
+  onComplete?: (_data: unknown) => void;
   /** SSE 에러 시 콜백 */
-  onError?: (message: string) => void;
+  onError?: (_message: string) => void;
   /** fallback: SSE URL 없을 때 사용할 단계 메시지 */
   steps?: string[];
   /** fallback: 단계 전환 간격 (ms) */

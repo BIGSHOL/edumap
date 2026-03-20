@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { z } from "zod/v4";
 import { getSchoolRiskData } from "@/lib/services/school-data";
 import { REGION_NAMES } from "@/lib/constants/regions";
 import {
@@ -15,8 +16,16 @@ import {
   buildPolicyPriorityPrompt,
   buildSchoolRiskContext,
 } from "@/lib/ai/prompts-gemini";
-import { calculateRiskScoreFromRaw } from "@/lib/analysis/early-alert";
+import { calculateRiskScoreFromRaw, type FactorBreakdown } from "@/lib/analysis/early-alert";
 import { getAcademyStats } from "@/lib/services/academy-data";
+
+/** GET 파라미터 검증 스키마 */
+const AiInsightQuerySchema = z.object({
+  type: z.enum(["comparison", "anomaly", "smart-search", "policy-priority"]),
+  schoolCode: z.string().min(1).optional(),
+  region: z.string().min(1).optional(),
+  q: z.string().min(1).optional(),
+});
 
 /**
  * AI 인사이트 통합 API
@@ -28,7 +37,16 @@ import { getAcademyStats } from "@/lib/services/academy-data";
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const type = searchParams.get("type");
+
+  const parsed = AiInsightQuerySchema.safeParse(Object.fromEntries(searchParams));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: parsed.error.issues.map((i) => i.message).join(", ") } },
+      { status: 400 }
+    );
+  }
+
+  const type = parsed.data.type;
 
   try {
     switch (type) {
@@ -40,11 +58,6 @@ export async function GET(request: Request) {
         return handleSmartSearch(searchParams);
       case "policy-priority":
         return handlePolicyPriority(searchParams);
-      default:
-        return NextResponse.json(
-          { error: { code: "BAD_REQUEST", message: "type 파라미터가 필요합니다 (comparison, anomaly, smart-search, policy-priority)" } },
-          { status: 400 }
-        );
     }
   } catch (error) {
     console.error("AI 인사이트 생성 실패:", error);
@@ -203,8 +216,7 @@ async function handlePolicyPriority(params: URLSearchParams) {
       schoolName: s.schoolName,
       score: s.score,
       level: s.level,
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      factors: s.factors?.map((f: any) => ({
+      factors: s.factors?.map((f: FactorBreakdown) => ({
         factor: f.factor ?? "",
         value: typeof f.value === "number" ? f.value : parseFloat(f.value) || 0,
         description: f.description ?? f.value ?? "",

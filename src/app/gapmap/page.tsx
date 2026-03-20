@@ -598,7 +598,7 @@ export default function GapMapPage() {
 function Pagination({ currentPage, totalPages, onPageChange }: {
   currentPage: number;
   totalPages: number;
-  onPageChange: (page: number) => void;
+  onPageChange: (_page: number) => void;
 }) {
   if (totalPages <= 1) return null;
   return (
@@ -756,8 +756,8 @@ function GapDetail({ result, aiSuggestion, aiLoading, streamUrl, onStreamComplet
   aiSuggestion: string;
   aiLoading: boolean;
   streamUrl?: string;
-  onStreamComplete?: (data: unknown) => void;
-  onStreamError?: (msg: string) => void;
+  onStreamComplete?: (_data: unknown) => void;
+  onStreamError?: (_msg: string) => void;
   onRequestAi?: () => void;
 }) {
   const style = SEVERITY_STYLES[result.overallSeverity];

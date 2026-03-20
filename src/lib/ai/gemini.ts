@@ -1,16 +1,10 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import { prisma } from "@/lib/db/prisma";
-
-// --- 모델 상수 ---
-const FLASH_MODEL = "gemini-2.5-flash";
-const FLASH_LITE_MODEL = "gemini-2.5-flash-lite";
-
-type GeminiModel = "flash" | "flash-lite";
-
-const MODEL_MAP: Record<GeminiModel, string> = {
-  flash: FLASH_MODEL,
-  "flash-lite": FLASH_LITE_MODEL,
-};
+import {
+  CLAUDE_ANALYSIS_MODEL,
+  GEMINI_MODEL_MAP,
+  type GeminiModel,
+} from "@/lib/constants/models";
 
 // --- 캐시 TTL (7일) ---
 const CACHE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -33,7 +27,7 @@ export async function generateWithGemini(opts: {
   maxTokens?: number;
 }): Promise<{ text: string; cached: boolean; model: string }> {
   const { prompt, model = "flash", cacheKey, maxTokens = 4096 } = opts;
-  const modelId = MODEL_MAP[model];
+  const modelId = GEMINI_MODEL_MAP[model];
 
   // 1. 캐시 조회
   try {
@@ -102,7 +96,7 @@ export async function generateWithGemini(opts: {
 export async function batchGenerateWithGemini(opts: {
   items: { key: string; context: string }[]; // key = schoolCode 등
   reportType: string;
-  promptBuilder: (contexts: string[]) => string;
+  promptBuilder: (_contexts: string[]) => string;
   model?: GeminiModel;
 }): Promise<Map<string, string>> {
   const { items, reportType, promptBuilder, model = "flash" } = opts;
@@ -136,7 +130,7 @@ export async function batchGenerateWithGemini(opts: {
   const apiKey = process.env.GEMINI_API_KEY;
   if (!apiKey) return results;
 
-  const modelId = MODEL_MAP[model];
+  const modelId = GEMINI_MODEL_MAP[model];
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -185,8 +179,6 @@ export async function batchGenerateWithGemini(opts: {
 // Claude Sonnet 4.6 호출 + ReportCache 캐시
 // ============================================================
 
-const CLAUDE_MODEL = "claude-sonnet-4-6";
-
 /**
  * Claude API 호출 + ReportCache 캐시
  * GapMap 개선 제안, 정책 개입 우선순위 등 심층 분석에 사용
@@ -224,7 +216,7 @@ export async function generateWithClaude(opts: {
   // 2. Claude 호출
   const apiKey = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
-    return { text: "", cached: false, model: CLAUDE_MODEL };
+    return { text: "", cached: false, model: CLAUDE_ANALYSIS_MODEL };
   }
 
   try {
@@ -232,7 +224,7 @@ export async function generateWithClaude(opts: {
     const client = new Anthropic({ apiKey });
 
     const message = await client.messages.create({
-      model: CLAUDE_MODEL,
+      model: CLAUDE_ANALYSIS_MODEL,
       max_tokens: maxTokens,
       messages: [{ role: "user", content: prompt }],
     });
@@ -248,7 +240,7 @@ export async function generateWithClaude(opts: {
           schoolCode: cacheKey.schoolCode ?? null,
           regionCode: cacheKey.regionCode ?? null,
           reportContent: text,
-          modelUsed: CLAUDE_MODEL,
+          modelUsed: CLAUDE_ANALYSIS_MODEL,
           generatedAt: new Date(),
           expiresAt: new Date(Date.now() + CACHE_TTL_MS),
         },
@@ -257,10 +249,10 @@ export async function generateWithClaude(opts: {
       // 캐시 저장 실패해도 결과는 반환
     }
 
-    return { text, cached: false, model: CLAUDE_MODEL };
+    return { text, cached: false, model: CLAUDE_ANALYSIS_MODEL };
   } catch (error) {
     console.error("Claude API 호출 실패:", error);
-    return { text: "", cached: false, model: CLAUDE_MODEL };
+    return { text: "", cached: false, model: CLAUDE_ANALYSIS_MODEL };
   }
 }
 

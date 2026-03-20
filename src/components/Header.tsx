@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 
 const NAV_ITEMS = [
   { href: "/", label: "대시보드" },
@@ -16,9 +17,9 @@ export function Header() {
 
   return (
     <header className="bg-primary text-white h-16 flex items-center px-12">
-      <a href="/" className="text-xl font-bold hover:text-white/90 transition-colors">
+      <Link href="/" className="text-xl font-bold hover:text-white/90 transition-colors">
         에듀맵 EduMap
-      </a>
+      </Link>
       <p className="ml-4 text-sm text-white/70">교육 데이터 AI 분석 플랫폼</p>
 
       <nav className="ml-auto flex items-center gap-6 text-sm">

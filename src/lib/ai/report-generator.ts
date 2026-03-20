@@ -3,8 +3,7 @@ import type { ReportType } from "@/types/report";
 import type { SchoolDetail } from "@/lib/api/contracts/schools";
 import type { AcademyStatsData } from "@/lib/services/academy-data";
 import { buildReportPrompt } from "./prompts";
-
-const MODEL = "claude-sonnet-4-6-20250514";
+import { CLAUDE_REPORT_MODEL } from "@/lib/constants/models";
 
 /**
  * Claude API를 사용하여 대상별 리포트를 생성합니다.
@@ -31,7 +30,7 @@ export async function generateReport(
     const prompt = buildReportPrompt(reportType, school, academyStats);
 
     const message = await client.messages.create({
-      model: MODEL,
+      model: CLAUDE_REPORT_MODEL,
       max_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
     });

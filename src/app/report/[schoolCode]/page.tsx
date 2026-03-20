@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useParams } from "next/navigation";
+import Link from "next/link";
 import type { ReportType } from "@/types/report";
 import type { SchoolDetail } from "@/lib/api/contracts/schools";
 import { TeacherStatsChart } from "@/components/charts/TeacherStatsChart";
@@ -101,9 +102,9 @@ export default function SchoolReportPage() {
           <div className="bg-surface border border-border rounded-lg p-12 text-center">
             <p className="text-2xl font-bold text-text-primary mb-2">학교를 찾을 수 없습니다</p>
             <p className="text-text-secondary mb-6">학교 코드: {schoolCode}</p>
-            <a href="/" className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-light transition-colors">
+            <Link href="/" className="px-6 py-2 bg-primary text-white rounded-lg text-sm font-medium hover:bg-primary-light transition-colors">
               대시보드로 돌아가기
-            </a>
+            </Link>
           </div>
         </main>
       </div>

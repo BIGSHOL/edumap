@@ -21,7 +21,7 @@ import type {
   TeacherPositionRow,
   AfterSchoolRow,
 } from "@/lib/api/schoolinfo";
-import { mockSchools, mockSchoolDetail, mockSchoolDetails } from "@/mocks/data/schools";
+import { mockSchools, mockSchoolDetails } from "@/mocks/data/schools";
 import {
   mapNeisToSchoolItem,
   mapToTeacherStats,
@@ -34,10 +34,12 @@ import {
   toSchulKndCode,
   toSchoolType,
 } from "./region-codes";
+import { REGION_NAMES } from "@/lib/constants/regions";
 import type { DataSource } from "./utils";
 import type { SchoolDetail, SchoolItem } from "@/lib/api/contracts/schools";
+import { CURRENT_ACADEMIC_YEAR, CURRENT_ACADEMIC_YEAR_NUM } from "@/lib/constants/academic-years";
 
-const CURRENT_YEAR = "2024"; // 학교알리미 공시 기준연도
+const CURRENT_YEAR = CURRENT_ACADEMIC_YEAR; // 학교알리미 공시 기준연도
 
 // ─── 학교 목록 ───
 
@@ -153,9 +155,9 @@ export async function getSchoolDetail(
       const school = await prisma.school.findUnique({
         where: { schoolCode },
         include: {
-          teacherStats: { where: { year: 2024 }, take: 1 },
-          financeStats: { where: { year: 2024 }, take: 1 },
-          afterschoolProgram: { where: { year: 2024 } },
+          teacherStats: { where: { year: CURRENT_ACADEMIC_YEAR_NUM }, take: 1 },
+          financeStats: { where: { year: CURRENT_ACADEMIC_YEAR_NUM }, take: 1 },
+          afterschoolProgram: { where: { year: CURRENT_ACADEMIC_YEAR_NUM } },
         },
       });
 
@@ -249,7 +251,7 @@ export async function getSchoolRiskData(filters?: {
           schoolName: true,
           district: true,
           teacherStats: {
-            where: { year: 2024 },
+            where: { year: CURRENT_ACADEMIC_YEAR_NUM },
             select: {
               studentsPerTeacher: true,
               tempTeacherRatio: true,
@@ -264,7 +266,7 @@ export async function getSchoolRiskData(filters?: {
             take: 1,
           },
           financeStats: {
-            where: { year: 2024 },
+            where: { year: CURRENT_ACADEMIC_YEAR_NUM },
             select: { budgetPerStudent: true },
             take: 1,
           },
@@ -352,9 +354,9 @@ export async function getSchoolDetails(filters?: {
       const schools = await prisma.school.findMany({
         where,
         include: {
-          teacherStats: { where: { year: 2024 }, take: 1 },
-          financeStats: { where: { year: 2024 }, take: 1 },
-          afterschoolProgram: { where: { year: 2024 }, take: 10 },
+          teacherStats: { where: { year: CURRENT_ACADEMIC_YEAR_NUM }, take: 1 },
+          financeStats: { where: { year: CURRENT_ACADEMIC_YEAR_NUM }, take: 1 },
+          afterschoolProgram: { where: { year: CURRENT_ACADEMIC_YEAR_NUM }, take: 10 },
         },
       });
 
@@ -619,7 +621,7 @@ async function cacheSchoolDetail(detail: SchoolDetail): Promise<void> {
       update: {},
       create: {
         regionCode: detail.regionCode,
-        regionName: detail.regionCode,
+        regionName: REGION_NAMES[detail.regionCode] ?? detail.regionCode,
       },
     });
 

@@ -1,12 +1,10 @@
 import { getSchoolDetail } from "@/lib/services/school-data";
 import { generateReport } from "@/lib/ai/report-generator";
 import { getAcademyStats } from "@/lib/services/academy-data";
-import type { ReportType } from "@/types/report";
-
-const VALID_REPORT_TYPES = ["policy", "teacher", "parent"] as const;
+import { ReportRequestSchema } from "@/lib/api/contracts/report";
 
 export async function POST(request: Request) {
-  let body: { schoolCode?: string; regionCode?: string; reportType?: string };
+  let body: unknown;
 
   try {
     body = await request.json();
@@ -17,7 +15,15 @@ export async function POST(request: Request) {
     );
   }
 
-  const { schoolCode, regionCode, reportType } = body;
+  const parsed = ReportRequestSchema.safeParse(body);
+  if (!parsed.success) {
+    return Response.json(
+      { error: { code: "BAD_REQUEST", message: parsed.error.issues.map((i) => i.message).join(", ") } },
+      { status: 400 }
+    );
+  }
+
+  const { schoolCode, regionCode, reportType: validType } = parsed.data;
 
   if (!schoolCode && !regionCode) {
     return Response.json(
@@ -30,20 +36,6 @@ export async function POST(request: Request) {
       { status: 400 }
     );
   }
-
-  if (!reportType || !VALID_REPORT_TYPES.includes(reportType as ReportType)) {
-    return Response.json(
-      {
-        error: {
-          code: "BAD_REQUEST",
-          message: `reportType은 ${VALID_REPORT_TYPES.join(", ")} 중 하나여야 합니다.`,
-        },
-      },
-      { status: 400 }
-    );
-  }
-
-  const validType = reportType as ReportType;
 
   try {
     // 학교 데이터 조회 (DB 캐시 → API → Mock)

@@ -172,6 +172,7 @@ export function calculateRiskScore(
 export interface FactorBreakdown {
   factor: string;
   value: string;
+  description?: string; // 요인 설명 (UI 표시용)
   rawScore: number;   // 개별 요인 점수 (0~100)
   weight: number;     // 가중치 (0~1)
   contribution: number; // 최종 점수 기여분 (rawScore * weight / totalWeight)

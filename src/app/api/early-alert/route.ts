@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
+import { z } from "zod/v4";
 import { getSchoolDetail, getSchoolRiskData } from "@/lib/services/school-data";
-import { calculateRiskScore, calculateRiskScoreFromRaw } from "@/lib/analysis/early-alert";
+import { calculateRiskScore, calculateRiskScoreFromRaw, type FactorBreakdown } from "@/lib/analysis/early-alert";
 import { sourceLabel } from "@/lib/services/utils";
 import { REGION_NAMES } from "@/lib/constants/regions";
 import { batchGenerateWithGemini, generateWithGemini } from "@/lib/ai/gemini";
@@ -11,12 +12,29 @@ import {
 } from "@/lib/ai/prompts-gemini";
 import { prisma, isDbConnected } from "@/lib/db/prisma";
 
+/** GET 파라미터 검증 스키마 */
+const EarlyAlertGetSchema = z.object({
+  schoolCode: z.string().min(1).optional(),
+  region: z.string().min(1).optional(),
+  district: z.string().min(1).optional(),
+  narrative: z.enum(["true", "false"]).optional(),
+});
+
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const schoolCode = searchParams.get("schoolCode");
-  const regionCode = searchParams.get("region") ?? undefined;
-  const district = searchParams.get("district") ?? undefined;
-  const withNarrative = searchParams.get("narrative") !== "false";
+
+  const parsed = EarlyAlertGetSchema.safeParse(Object.fromEntries(searchParams));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: parsed.error.issues.map((i) => i.message).join(", ") } },
+      { status: 400 }
+    );
+  }
+
+  const schoolCode = parsed.data.schoolCode ?? null;
+  const regionCode = parsed.data.region;
+  const district = parsed.data.district;
+  const withNarrative = parsed.data.narrative !== "false";
 
   // 개별 학교 위험도 조회 (상세 포함, RiskScore DB 캐싱)
   if (schoolCode) {
@@ -120,8 +138,7 @@ export async function GET(request: Request) {
             schoolName: s.schoolName,
             score: s.score,
             level: s.level,
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            factors: s.factors?.map((f: any) => ({
+            factors: s.factors?.map((f: FactorBreakdown) => ({
               factor: f.factor ?? "",
               value: typeof f.value === "number" ? f.value : parseFloat(f.value) || 0,
               description: f.description ?? f.value ?? "",

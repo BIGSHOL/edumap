@@ -1,8 +1,18 @@
 import { NextResponse } from "next/server";
+import { z } from "zod/v4";
 import { getZonesByRegion } from "@/lib/services/zone-data";
 import { getSchoolDetails } from "@/lib/services/school-data";
 import { analyzeZone } from "@/lib/analysis/zone-analysis";
 import { sourceLabel } from "@/lib/services/utils";
+
+/** GET 파라미터 검증 스키마 */
+const ZoneAnalysisQuerySchema = z.object({
+  region: z.string().min(1).optional().default("B10"),
+  eduSupportCode: z.string().min(1).optional(),
+  zoneId: z.string().min(1).optional(),
+  page: z.coerce.number().int().min(1).optional().default(1),
+  limit: z.coerce.number().int().min(1).max(2000).optional().default(100),
+});
 
 /**
  * GET /api/zone-analysis?region=B10&eduSupportCode=B11&zoneId=...
@@ -12,11 +22,20 @@ import { sourceLabel } from "@/lib/services/utils";
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
-  const regionCode = searchParams.get("region") ?? "B10";
-  const eduSupportCode = searchParams.get("eduSupportCode") ?? undefined;
-  const zoneId = searchParams.get("zoneId") ?? undefined;
-  const page = Math.max(1, Number(searchParams.get("page") ?? 1));
-  const limit = Math.min(2000, Math.max(1, Number(searchParams.get("limit") ?? 100)));
+
+  const parsed = ZoneAnalysisQuerySchema.safeParse(Object.fromEntries(searchParams));
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: { code: "BAD_REQUEST", message: parsed.error.issues.map((i) => i.message).join(", ") } },
+      { status: 400 }
+    );
+  }
+
+  const regionCode = parsed.data.region;
+  const eduSupportCode = parsed.data.eduSupportCode;
+  const zoneId = parsed.data.zoneId;
+  const page = parsed.data.page;
+  const limit = parsed.data.limit;
 
   // 1. 학구 매핑 조회
   const { data: zones, source: zoneSource } = await getZonesByRegion(

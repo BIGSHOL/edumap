@@ -35,6 +35,7 @@ export default function Home() {
   const [regionSummary, setRegionSummary] = useState("");
   const [narratives, setNarratives] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalSchools, setTotalSchools] = useState(0);
 
@@ -53,6 +54,7 @@ export default function Home() {
   const loadSchools = useCallback(
     async (region: string, page: number, opts?: { search?: string; district?: string }) => {
       setLoading(true);
+      setErrorMsg(null);
       try {
         const params = new URLSearchParams({
           limit: String(PAGE_SIZE),
@@ -73,9 +75,12 @@ export default function Home() {
         if (res.ok) {
           setSchools(body.data);
           setTotalSchools(body.meta?.total ?? body.analyzed);
+        } else {
+          setErrorMsg("학교 목록을 불러오는 데 실패했습니다. 잠시 후 다시 시도해 주세요.");
         }
       } catch {
         console.error("학교 목록 로딩 실패");
+        setErrorMsg("서버와의 연결에 실패했습니다. 네트워크 상태를 확인해 주세요.");
       } finally {
         setLoading(false);
       }
@@ -101,8 +106,19 @@ export default function Home() {
       }
     } catch {
       console.error("위험도 로딩 실패");
+      setErrorMsg("위험도 데이터를 불러오는 데 실패했습니다. 잠시 후 다시 시도해 주세요.");
     }
   }, []);
+
+  // 재시도
+  const handleRetry = useCallback(() => {
+    setErrorMsg(null);
+    loadSchools(selectedRegion, currentPage, {
+      search: searchQuery || undefined,
+      district: selectedDistrict || undefined,
+    });
+    loadRiskData(selectedRegion, selectedDistrict || undefined);
+  }, [selectedRegion, currentPage, searchQuery, selectedDistrict, loadSchools, loadRiskData]);
 
   // 지도 데이터 로드 (1회)
   useEffect(() => {
@@ -217,6 +233,19 @@ export default function Home() {
             </select>
           )}
         </section>
+
+        {/* 에러 알림 */}
+        {errorMsg && (
+          <section className="mb-6 bg-risk-danger/5 border border-risk-danger/30 rounded-lg p-4 flex items-center justify-between">
+            <p className="text-sm text-risk-danger">{errorMsg}</p>
+            <button
+              onClick={handleRetry}
+              className="ml-4 shrink-0 px-4 py-1.5 rounded-lg bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+            >
+              다시 시도
+            </button>
+          </section>
+        )}
 
         {/* 요약 카드 */}
         <section className="grid grid-cols-3 gap-6 mb-8">
