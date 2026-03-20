@@ -20,6 +20,8 @@ export const ZoneSchoolSummarySchema = z.object({
   riskLevel: z.enum(["safe", "caution", "warning", "danger"]),
   coverageRate: z.number(),
   gapCount: z.number(),
+  latitude: z.number().nullable(),
+  longitude: z.number().nullable(),
 });
 
 export type ZoneSchoolSummary = z.infer<typeof ZoneSchoolSummarySchema>;

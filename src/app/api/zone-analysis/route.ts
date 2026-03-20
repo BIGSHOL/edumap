@@ -16,7 +16,7 @@ export async function GET(request: Request) {
   const eduSupportCode = searchParams.get("eduSupportCode") ?? undefined;
   const zoneId = searchParams.get("zoneId") ?? undefined;
   const page = Math.max(1, Number(searchParams.get("page") ?? 1));
-  const limit = Math.min(100, Math.max(1, Number(searchParams.get("limit") ?? 20)));
+  const limit = Math.min(2000, Math.max(1, Number(searchParams.get("limit") ?? 100)));
 
   // 1. 학구 매핑 조회
   const { data: zones, source: zoneSource } = await getZonesByRegion(
@@ -47,12 +47,15 @@ export async function GET(request: Request) {
     });
   });
 
-  // 위험도 높은 학구 우선 정렬
-  zoneResults.sort((a, b) => b.avgRiskScore - a.avgRiskScore);
+  // 매칭된 학교가 있는 학구만 (0개 학구 = 의미 없는 분석)
+  const validResults = zoneResults.filter((z) => z.schoolCount > 0);
+
+  // 위험도 높은 학구 우선, 같으면 학교 수 많은 순
+  validResults.sort((a, b) => b.avgRiskScore - a.avgRiskScore || b.schoolCount - a.schoolCount);
 
   // 페이지네이션
-  const total = zoneResults.length;
-  const paged = zoneResults.slice((page - 1) * limit, page * limit);
+  const total = validResults.length;
+  const paged = validResults.slice((page - 1) * limit, page * limit);
 
   const response = NextResponse.json({
     data: paged,

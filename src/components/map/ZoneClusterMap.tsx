@@ -25,6 +25,7 @@ interface ZoneClusterMapProps {
   center?: [number, number];
   zoom?: number;
   onZoneClick?: (zoneId: string) => void;
+  selectedZoneId?: string | null;
 }
 
 const LEVEL_COLORS: Record<string, string> = {
@@ -46,6 +47,7 @@ export function ZoneClusterMap({
   center = [36.5, 127.5],
   zoom = 7,
   onZoneClick,
+  selectedZoneId,
 }: ZoneClusterMapProps) {
   const mapRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
@@ -167,6 +169,25 @@ export function ZoneClusterMap({
       map.fitBounds(bounds, { padding: [30, 30], maxZoom: 12 });
     }
   }, [zones, onZoneClick]);
+
+  // 학구 선택 시 해당 위치로 이동
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !selectedZoneId) return;
+
+    const zone = zones.find((z) => z.zoneId === selectedZoneId);
+    if (!zone) return;
+
+    const validSchools = zone.schools.filter(
+      (s) => s.latitude != null && s.longitude != null
+    );
+    if (validSchools.length === 0) return;
+
+    const lat = validSchools.reduce((s, sc) => s + sc.latitude!, 0) / validSchools.length;
+    const lng = validSchools.reduce((s, sc) => s + sc.longitude!, 0) / validSchools.length;
+
+    map.flyTo([lat, lng], 13, { duration: 0.8 });
+  }, [selectedZoneId, zones]);
 
   return (
     <div

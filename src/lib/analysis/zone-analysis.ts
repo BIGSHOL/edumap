@@ -27,6 +27,8 @@ export interface ZoneAnalysisResult {
     riskLevel: RiskLevel;
     coverageRate: number;
     gapCount: number;
+    latitude: number | null;
+    longitude: number | null;
   }>;
   // 학구 평균 지표
   avgRiskScore: number;
@@ -88,6 +90,8 @@ export function analyzeZone(
       contributingFactors: risk.contributingFactors,
       studentsPerTeacher: school.teacherStats?.studentsPerTeacher ?? null,
       budgetPerStudent: school.financeStats?.budgetPerStudent ?? null,
+      latitude: school.latitude ?? null,
+      longitude: school.longitude ?? null,
     };
   });
 
@@ -148,6 +152,8 @@ export function analyzeZone(
       riskLevel: r.riskLevel,
       coverageRate: r.coverageRate,
       gapCount: r.gapCount,
+      latitude: r.latitude,
+      longitude: r.longitude,
     })),
     avgRiskScore,
     avgCoverageRate,

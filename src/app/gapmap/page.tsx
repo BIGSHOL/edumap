@@ -58,6 +58,7 @@ export default function GapMapPage() {
   const [eduSupportOffices, setEduSupportOffices] = useState<Array<{ code: string; name: string; zoneCount: number }>>([]);
   const [selectedEduSupport, setSelectedEduSupport] = useState("");
   const [zoneCurrentPage, setZoneCurrentPage] = useState(1);
+  const [minSchoolCount, setMinSchoolCount] = useState(2); // 최소 학교 수 필터 (1개짜리 제외)
 
   // 시도 변경 → 시군구/교육지원청 목록 로드
   useEffect(() => {
@@ -111,7 +112,7 @@ export default function GapMapPage() {
       setLoading(true);
       setZoneCurrentPage(1);
       try {
-        const params = new URLSearchParams({ region: selectedRegion, limit: "100" });
+        const params = new URLSearchParams({ region: selectedRegion, limit: "1000" });
         if (selectedEduSupport) params.set("eduSupportCode", selectedEduSupport);
         const res = await fetch(`/api/zone-analysis?${params}`);
         const body = await res.json();
@@ -166,20 +167,21 @@ export default function GapMapPage() {
   const totalPages = Math.ceil(sortedResults.length / PAGE_SIZE);
   const pagedResults = sortedResults.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE);
 
-  // 학구별 페이지
-  const zoneTotalPages = Math.ceil(zoneResults.length / PAGE_SIZE);
-  const pagedZoneResults = zoneResults.slice((zoneCurrentPage - 1) * PAGE_SIZE, zoneCurrentPage * PAGE_SIZE);
+  // 학구별 필터 + 페이지
+  const filteredZoneResults = zoneResults.filter((z) => z.schoolCount >= minSchoolCount);
+  const zoneTotalPages = Math.ceil(filteredZoneResults.length / PAGE_SIZE);
+  const pagedZoneResults = filteredZoneResults.slice((zoneCurrentPage - 1) * PAGE_SIZE, zoneCurrentPage * PAGE_SIZE);
 
-  // 학구 지도 데이터 변환
-  const zoneMarkers: ZoneMarker[] = zoneResults
+  // 학구 지도 데이터 변환 (필터 적용)
+  const zoneMarkers: ZoneMarker[] = filteredZoneResults
     .filter((z) => z.schools.length > 0)
     .map((z) => ({
       zoneId: z.zoneId,
       zoneName: z.zoneName,
       schools: z.schools.map((s) => ({
         schoolName: s.schoolName,
-        latitude: null, // API에서 좌표를 별도로 가져와야 함
-        longitude: null,
+        latitude: s.latitude ?? null,
+        longitude: s.longitude ?? null,
         riskScore: s.riskScore,
         riskLevel: s.riskLevel,
       })),
@@ -270,6 +272,19 @@ export default function GapMapPage() {
               })}
             </select>
           )}
+
+          {/* 학구별: 최소 학교 수 필터 */}
+          {analysisMode === "zone" && (
+            <select
+              value={minSchoolCount}
+              onChange={(e) => { setMinSchoolCount(Number(e.target.value)); setZoneCurrentPage(1); }}
+              className="h-11 px-4 rounded-lg border border-border bg-surface text-sm font-medium"
+            >
+              <option value={1}>전체 학구</option>
+              <option value={2}>2개교 이상</option>
+              <option value={3}>3개교 이상</option>
+            </select>
+          )}
         </div>
 
         <p className="text-text-secondary mb-8">
@@ -321,39 +336,51 @@ export default function GapMapPage() {
           <section className="grid grid-cols-4 gap-6 mb-8">
             <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
               <p className="text-text-secondary text-sm">분석 학구</p>
-              <p className="text-3xl font-bold mt-1">
-                {loading ? "—" : zoneResults.length}
-                <span className="text-sm font-normal text-text-secondary ml-1">개</span>
-              </p>
+              {loading ? (
+                <div className="animate-pulse h-9 w-16 bg-border rounded mt-1" />
+              ) : (
+                <p className="text-3xl font-bold mt-1">
+                  {filteredZoneResults.length}
+                  <span className="text-sm font-normal text-text-secondary ml-1">개</span>
+                </p>
+              )}
             </div>
             <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
               <p className="text-text-secondary text-sm">위험 학구</p>
-              <p className="text-3xl font-bold mt-1 text-risk-danger">
-                {loading ? "—" : zoneResults.filter((z) => z.overallLevel === "danger" || z.overallLevel === "warning").length}
-                <span className="text-sm font-normal text-text-secondary ml-1">개</span>
-              </p>
+              {loading ? (
+                <div className="animate-pulse h-9 w-16 bg-border rounded mt-1" />
+              ) : (
+                <p className="text-3xl font-bold mt-1 text-risk-danger">
+                  {filteredZoneResults.filter((z) => z.overallLevel === "danger" || z.overallLevel === "warning").length}
+                  <span className="text-sm font-normal text-text-secondary ml-1">개</span>
+                </p>
+              )}
             </div>
             <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
               <p className="text-text-secondary text-sm">평균 위험도</p>
-              <p className="text-3xl font-bold mt-1">
-                {loading
-                  ? "—"
-                  : zoneResults.length > 0
-                    ? Math.round(zoneResults.reduce((s, z) => s + z.avgRiskScore, 0) / zoneResults.length)
+              {loading ? (
+                <div className="animate-pulse h-9 w-16 bg-border rounded mt-1" />
+              ) : (
+                <p className="text-3xl font-bold mt-1">
+                  {filteredZoneResults.length > 0
+                    ? Math.round(filteredZoneResults.reduce((s, z) => s + z.avgRiskScore, 0) / filteredZoneResults.length)
                     : 0}
-                <span className="text-sm font-normal text-text-secondary ml-1">점</span>
-              </p>
+                  <span className="text-sm font-normal text-text-secondary ml-1">점</span>
+                </p>
+              )}
             </div>
             <div className="bg-surface border border-border rounded-lg p-5 shadow-sm">
               <p className="text-text-secondary text-sm">평균 커버리지</p>
-              <p className="text-3xl font-bold mt-1">
-                {loading
-                  ? "—"
-                  : zoneResults.length > 0
-                    ? Math.round(zoneResults.reduce((s, z) => s + z.avgCoverageRate, 0) / zoneResults.length)
+              {loading ? (
+                <div className="animate-pulse h-9 w-16 bg-border rounded mt-1" />
+              ) : (
+                <p className="text-3xl font-bold mt-1">
+                  {filteredZoneResults.length > 0
+                    ? Math.round(filteredZoneResults.reduce((s, z) => s + z.avgCoverageRate, 0) / filteredZoneResults.length)
                     : 0}
-                <span className="text-sm font-normal text-text-secondary ml-1">%</span>
-              </p>
+                  <span className="text-sm font-normal text-text-secondary ml-1">%</span>
+                </p>
+              )}
             </div>
           </section>
         )}
@@ -525,6 +552,7 @@ export default function GapMapPage() {
                 {zoneMarkers.length > 0 ? (
                   <ZoneClusterMapDynamic
                     zones={zoneMarkers}
+                    selectedZoneId={selectedZone?.zoneId ?? null}
                     onZoneClick={(zoneId) => {
                       const zone = zoneResults.find((z) => z.zoneId === zoneId);
                       if (zone) setSelectedZone(zone);

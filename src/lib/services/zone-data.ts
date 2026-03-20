@@ -103,10 +103,22 @@ function groupByZone(rows: DistrictZoneRow[]): ZoneMapping[] {
   return Array.from(zoneMap.values());
 }
 
+/** cddcCode(7자리) → ATPT코드 역매핑 */
+const CDDC_TO_ATPT: Record<string, string> = {
+  "7010000": "B10", "7150000": "C10", "7240000": "D10",
+  "7310000": "E10", "7380000": "F10", "7430000": "G10",
+  "7480000": "H10", "7530000": "J10", "7801000": "K10",
+  "8000000": "M10", "8140000": "N10", "8321000": "P10",
+  "8490000": "Q10", "8750000": "R10", "9010000": "S10",
+  "9290000": "T10",
+};
+
 /** API 응답 → DB 캐싱 (비동기, 실패 무시) */
 async function cacheZonesToDb(rows: DistrictZoneRow[]): Promise<void> {
   try {
     for (const row of rows) {
+      // cddcCode(7자리) → ATPT코드(B10 등)로 변환해서 저장
+      const atptCode = CDDC_TO_ATPT[row.cddcCode] ?? row.cddcCode;
       await prisma.districtZone.upsert({
         where: {
           idx_zone_school: {
@@ -117,7 +129,7 @@ async function cacheZonesToDb(rows: DistrictZoneRow[]): Promise<void> {
         update: {
           schoolName: row.schulNm,
           schoolLevel: row.enfsType,
-          sidoEduCode: row.cddcCode,
+          sidoEduCode: atptCode,
           sidoEduName: row.cddcNm,
           eduSupportCode: row.edcSport,
           eduSupportName: row.edcSportNm,
@@ -128,7 +140,7 @@ async function cacheZonesToDb(rows: DistrictZoneRow[]): Promise<void> {
           schoolId: row.schoolId,
           schoolName: row.schulNm,
           schoolLevel: row.enfsType,
-          sidoEduCode: row.cddcCode,
+          sidoEduCode: atptCode,
           sidoEduName: row.cddcNm,
           eduSupportCode: row.edcSport,
           eduSupportName: row.edcSportNm,

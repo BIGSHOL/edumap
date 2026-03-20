@@ -11,8 +11,12 @@
 
 import { getCached, setCache } from "@/lib/services/api-cache";
 
+/**
+ * HTTP 사용 — api.data.go.kr HTTPS가 특정 환경에서 SSL 핸드셰이크 실패
+ * 공공데이터포털 공식 안내에서도 http:// 엔드포인트 제공
+ */
 const BASE_URL =
-  "https://api.data.go.kr/openapi/tn_pubr_public_schul_atndskl_zn_drw_lnkinfo_api";
+  "http://api.data.go.kr/openapi/tn_pubr_public_schul_atndskl_zn_drw_lnkinfo_api";
 
 /** API 응답 행 (학구-학교 연계 1건) */
 export interface DistrictZoneRow {
